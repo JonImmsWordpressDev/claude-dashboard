@@ -117,4 +117,4 @@ The recommended path is [Tailscale](https://tailscale.com): install it on the Ma
 
 ## Credits
 
-Built by [Jon Imms](https://jonimms.com) — WordPress and Gutenberg developer writing about AI-assisted development — pair-programmed with [Claude Code](https://claude.com/claude-code). MIT licensed; issues and PRs welcome.
+Built by [Jon Imms](https://jonimms.com) — WordPress and Gutenberg developer writing about AI-assisted development — pair-programmed with [Claude Code](https://claude.com/claude-code). The story of how it was built is in [the launch post](https://jonimms.com/blog/claude-code-dashboard/). MIT licensed; issues and PRs welcome.
