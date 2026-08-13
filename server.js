@@ -152,6 +152,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url === '/api/stats') {
+    json(res, 200, collector.statsSummary());
+    return;
+  }
+
   if (url === '/api/config' && req.method === 'GET') {
     json(res, 200, {
       ...cfg.readConfig(),

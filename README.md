@@ -34,6 +34,9 @@ node server.js
 
 - **Transcripts** — click any session title (cards, digest, search results, project drawer) to read the conversation: your prompts, Claude's replies rendered as markdown, tool calls as compact one-liners, and away-summaries highlighted. Long sessions show the newest ~1200 events. **Running sessions follow live** — a `● live` badge appears, new turns stream in every few seconds, and the view sticks to the bottom unless you've scrolled up to read.
 - **Search** — the header box searches every prompt you've ever sent plus all session titles (Enter to run, 2+ characters). Results open straight into transcripts.
+- **Command palette** — `⌘K` from anywhere: fuzzy-jump to any project or session, watch a live session, start a new one, open settings or stats. Arrow keys + Enter.
+- **Stats** — click the weekly bar chart in the header: a 26-week activity heatmap, your busiest hours, and an all-time per-model token/cost breakdown.
+- **Export** — any transcript downloads as clean markdown via the `export ⇩` button.
 - **New session** — the `⊕` button on a project card opens a fresh terminal window in that project running `claude`.
 - **Cost trend** — the small bar chart in the header is estimated cost per week for the last 8 weeks (hover for numbers). Costs include subagent tokens.
 - **Project details** — click any project's name for a slide-over with its full session list, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools). Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
@@ -60,7 +63,7 @@ The ⚙ gear in the header opens settings — no JSON editing required:
 - **Terminal** for open/new-session buttons: Ghostty, iTerm2, or Terminal.app, auto-detected (`config.json`)
 - **Rename any project** (writes `names.json`) or **hide it** and its whole subtree (writes `ignore.json`), with an unhide list below
 
-Everything saves instantly; the underlying files stay hand-editable. Press `/` anywhere to jump to search.
+Everything saves instantly; the underlying files stay hand-editable. Keyboard: `⌘K` for the palette, `/` for search, `Esc` closes anything.
 
 ## Getting started with config
 

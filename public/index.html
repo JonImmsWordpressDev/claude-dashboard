@@ -404,6 +404,58 @@
   .md a { color: var(--accent); }
   .md hr { border: none; border-top: 1px solid var(--line); margin: 10px 0; }
 
+  /* ---------- stats drawer ---------- */
+  #wk-chart { cursor: pointer; }
+  .heat {
+    display: grid; grid-auto-flow: column;
+    grid-template-rows: repeat(7, 11px); gap: 3px;
+    margin-top: 10px; overflow-x: auto; padding-bottom: 4px;
+  }
+  .heat .hc { width: 11px; height: 11px; border-radius: 2px; background: var(--surface2); }
+  .hours { display: flex; align-items: flex-end; gap: 3px; height: 46px; margin-top: 10px; }
+  .hours .hb { flex: 1; background: var(--accent); border-radius: 1px 1px 0 0; min-height: 2px; }
+  .hours-labels { display: flex; justify-content: space-between; color: var(--faint); font-size: 10px; margin-top: 3px; }
+  .stat-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+  .stat-table td { padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .stat-table td:last-child, .stat-table td:nth-child(2) { text-align: right; color: var(--muted); }
+  .stat-totals { color: var(--muted); font-size: 12px; margin-top: 12px; }
+  .stat-totals strong { color: var(--ink); }
+
+  /* ---------- command palette ---------- */
+  #palette-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,0.4); }
+  #palette {
+    position: fixed; top: 12vh; left: 50%; transform: translateX(-50%); z-index: 31;
+    width: min(620px, 92vw);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+  }
+  #palette input {
+    width: 100%; font: 14px 'JetBrains Mono', ui-monospace, monospace;
+    background: none; border: none; outline: none; color: var(--ink);
+    padding: 14px 16px; border-bottom: 1px solid var(--line);
+  }
+  #palette-list { list-style: none; margin: 0; padding: 6px 0; max-height: 46vh; overflow-y: auto; }
+  #palette-list li {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 7px 16px; font-size: 12.5px; cursor: pointer;
+  }
+  #palette-list li .pk { color: var(--accent); flex: none; width: 14px; }
+  #palette-list li .pl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #palette-list li .ph { color: var(--faint); font-size: 11px; flex: none; }
+  #palette-list li.sel { background: var(--accent-bg); }
+  #palette-list li.sel .pl { color: var(--accent); }
+  #palette-empty { color: var(--faint); font-size: 12px; padding: 12px 16px; }
+
+  /* welcome card for fresh installs */
+  #welcome {
+    grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 3px; padding: 26px 30px; line-height: 1.7;
+  }
+  #welcome h2 { font-size: 14px; margin-bottom: 8px; }
+  #welcome h2 .tilde { color: var(--accent); }
+  #welcome code { background: var(--surface2); padding: 1px 5px; border-radius: 2px; }
+  #welcome p { color: var(--muted); font-size: 12.5px; }
+
   #toast {
     position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
     background: var(--ink); color: var(--bg);
@@ -448,6 +500,11 @@
   </details>
 </main>
 <div id="toast"></div>
+<div id="palette-backdrop" hidden></div>
+<div id="palette" hidden>
+  <input id="palette-input" type="text" placeholder="Jump to a project, session, or action…" autocomplete="off">
+  <ul id="palette-list"></ul>
+</div>
 <div id="drawer-backdrop" hidden></div>
 <aside id="drawer" hidden>
   <div class="d-head">
@@ -765,7 +822,13 @@ function render(state) {
     const isDormant = !p.isLive && (!p.lastActivityAt || now - p.lastActivityAt > DORMANT_MS);
     (isDormant ? dormant : active).push(p);
   }
-  patch($('#grid'), active.map(projectCard).join(''));
+  patch($('#grid'), active.length || dormant.length
+    ? active.map(projectCard).join('')
+    : `<div id="welcome">
+        <h2><span class="tilde">❯</span> Welcome to Claude Dashboard</h2>
+        <p>No Claude Code projects found yet. Run <code>claude</code> in any folder and it appears here automatically — live status, transcripts, git state, costs, the lot.</p>
+        <p>Tip: press <code>⌘K</code> to jump anywhere, <code>/</code> to search, and click ⚙ for settings.</p>
+      </div>`);
   const d = $('#dormant');
   d.hidden = dormant.length === 0;
   $('summary', d).textContent = `Dormant — ${dormant.length} project${dormant.length === 1 ? '' : 's'}`;
@@ -1006,9 +1069,11 @@ function transcriptHtml(events) {
   return parts.join('');
 }
 
+let exportableSession = null;
 function transcriptStatus() {
-  const liveNow = liveIds.has(follow.id);
-  $('#d-path').textContent = `${follow.projectName} · ${follow.eventCount} events${liveNow ? ' · ● live' : ''}`;
+  const liveNow = follow.id && liveIds.has(follow.id);
+  $('#d-path').innerHTML = `${esc(follow.projectName)} · ${follow.eventCount} events${liveNow ? ' · ● live' : ''}
+    <button class="copy" data-export title="Download this transcript as markdown">export ⇩</button>`;
 }
 
 async function pollFollow() {
@@ -1038,6 +1103,7 @@ async function openTranscript(sessionId) {
     const r = await fetch(`/api/session?id=${encodeURIComponent(sessionId)}`);
     if (!r.ok) throw new Error();
     const t = await r.json();
+    exportableSession = { id: sessionId, title: t.title };
     follow.id = sessionId;
     follow.offset = t.nextOffset;
     follow.lastDay = '';
@@ -1207,7 +1273,178 @@ document.addEventListener('click', (e) => {
 });
 $('#d-close').addEventListener('click', closeDetail);
 $('#drawer-backdrop').addEventListener('click', closeDetail);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeDetail(); if (typeof closePalette === 'function') closePalette(); }
+});
+
+// ---------- stats view ----------
+async function openStats() {
+  openDrawerShell('Stats', 'all projects, ignored ones excluded');
+  try {
+    const r = await fetch('/api/stats');
+    if (!r.ok) throw new Error();
+    const s = await r.json();
+    const max = Math.max(1, ...s.days.map((d) => d.c));
+    // pad so weeks align into columns (Sunday-first)
+    const pad = new Date(s.days[0].t).getDay();
+    const cells = Array(pad).fill('<span class="hc" style="visibility:hidden"></span>').concat(
+      s.days.map((d) => {
+        const date = new Date(d.t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const style = d.c ? `background:var(--accent);opacity:${(0.25 + 0.75 * (d.c / max)).toFixed(2)}` : '';
+        return `<span class="hc" style="${style}" title="${esc(`${date}: ${d.c} prompt${d.c === 1 ? '' : 's'}`)}"></span>`;
+      })
+    );
+    const hmax = Math.max(1, ...s.hours);
+    const hourBars = s.hours.map((c, h) =>
+      `<span class="hb" style="height:${Math.max(4, Math.round((c / hmax) * 100))}%${c ? '' : ';background:var(--surface2)'}"
+        title="${esc(`${h}:00 — ${c} prompts`)}"></span>`).join('');
+    const models = Object.entries(s.byModel).sort((a, b) => b[1].cost - a[1].cost);
+    const modelRows = models.map(([m, e]) => `<tr>
+      <td>${esc(m)}</td>
+      <td>${(e.tokens / 1e6).toFixed(1)}M tok</td>
+      <td>≈$${e.cost.toFixed(2)}</td>
+    </tr>`).join('');
+    $('#d-body').innerHTML =
+      dSection('Activity — last 26 weeks', `<div class="heat">${cells.join('')}</div>`) +
+      dSection('Busiest hours', `<div class="hours">${hourBars}</div>
+        <div class="hours-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>`) +
+      dSection('By model — all time', models.length ? `<table class="stat-table">${modelRows}</table>` : null, 'No usage recorded yet.') +
+      `<div class="stat-totals"><strong>${s.totals.sessions}</strong> sessions · <strong>${s.totals.prompts}</strong> prompts · <strong>≈$${s.totals.cost}</strong> estimated list-price value, all time</div>`;
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load stats.</div>';
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#wk-chart')) openStats();
+});
+
+// ---------- transcript export ----------
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-export]') || !exportableSession) return;
+  try {
+    const r = await fetch(`/api/session?id=${encodeURIComponent(exportableSession.id)}`);
+    const t = await r.json();
+    const lines = [`# ${t.title}`, '', `_${t.projectName} — exported from Claude Dashboard, ${new Date().toLocaleString()}_`, ''];
+    for (const ev of t.events) {
+      if (ev.kind === 'user') lines.push(`**You:** ${ev.text}`, '');
+      else if (ev.kind === 'assistant') lines.push(ev.text, '');
+      else if (ev.kind === 'tool') lines.push(`> ⚙ \`${ev.name}\` ${ev.input || ''}`, '');
+      else if (ev.kind === 'note') lines.push(`> **Recap:** ${ev.text}`, '');
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${t.title.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'session'}.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('Transcript downloaded');
+  } catch {
+    toast("Couldn't export");
+  }
+});
+
+// ---------- command palette (⌘K) ----------
+const pal = { items: [], sel: 0 };
+
+function paletteItems(q) {
+  const items = [];
+  const st = lastState || { projects: [], liveSessions: [] };
+  items.push({ k: '⚙', label: 'Settings', hint: 'rename, hide, terminal, notifications', run: openSettings });
+  items.push({ k: '▲', label: 'Stats', hint: 'heatmap · models · hours', run: openStats });
+  for (const l of st.liveSessions || []) {
+    items.push({ k: '●', label: `Watch live: ${l.projectName} — ${l.title || ''}`, hint: l.status, run: () => openTranscript(l.sessionId) });
+  }
+  for (const p of st.projects || []) {
+    items.push({ k: '❯', label: p.name, hint: 'project details', run: () => openDetail(p.path, p.name) });
+    items.push({ k: '⊕', label: `New session in ${p.name}`, hint: 'terminal', run: () =>
+      fetch('/api/open', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newSession: true, projectPath: p.path, target: 'terminal' }) })
+        .then((r) => r.json()).then((o) => toast(o.ok ? 'Opening new session…' : `Couldn't open: ${o.error}`)) });
+    for (const s of p.sessions) {
+      items.push({ k: '·', label: `${p.name}: ${s.title}`, hint: relTime(s.lastActivityAt), run: () => openTranscript(s.sessionId) });
+    }
+  }
+  if (!q) return items.filter((i) => ['⚙', '▲', '●', '❯'].includes(i.k)).slice(0, 12);
+  const needle = q.toLowerCase();
+  const scored = [];
+  for (const it of items) {
+    const l = it.label.toLowerCase();
+    let score = -1;
+    if (l.includes(needle)) score = 100 - l.indexOf(needle);
+    else {
+      // subsequence match
+      let i = 0;
+      for (const ch of l) if (ch === needle[i]) i++;
+      if (i === needle.length) score = 10;
+    }
+    if (score >= 0) scored.push([score, it]);
+  }
+  scored.sort((a, b) => b[0] - a[0]);
+  const out = scored.slice(0, 11).map(([, it]) => it);
+  out.push({ k: '🔎', label: `Search all prompts for "${q}"`, hint: 'Enter', run: () => runSearch(q) });
+  return out;
+}
+
+function renderPalette() {
+  const list = $('#palette-list');
+  if (!pal.items.length) {
+    list.innerHTML = '<div id="palette-empty">Nothing matches.</div>';
+    return;
+  }
+  list.innerHTML = pal.items.map((it, i) => `
+    <li class="${i === pal.sel ? 'sel' : ''}" data-pi="${i}">
+      <span class="pk">${it.k}</span><span class="pl">${esc(it.label)}</span><span class="ph">${esc(it.hint || '')}</span>
+    </li>`).join('');
+  list.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
+}
+
+function openPalette() {
+  closeDetail();
+  $('#palette').hidden = false;
+  $('#palette-backdrop').hidden = false;
+  const input = $('#palette-input');
+  input.value = '';
+  pal.sel = 0;
+  pal.items = paletteItems('');
+  renderPalette();
+  input.focus();
+}
+
+function closePalette() {
+  $('#palette').hidden = true;
+  $('#palette-backdrop').hidden = true;
+}
+
+function runPaletteSelection(i) {
+  const it = pal.items[i];
+  if (!it) return;
+  closePalette();
+  it.run();
+}
+
+$('#palette-input').addEventListener('input', (e) => {
+  pal.items = paletteItems(e.target.value.trim());
+  pal.sel = 0;
+  renderPalette();
+});
+$('#palette-input').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); pal.sel = Math.min(pal.sel + 1, pal.items.length - 1); renderPalette(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); pal.sel = Math.max(pal.sel - 1, 0); renderPalette(); }
+  else if (e.key === 'Enter') runPaletteSelection(pal.sel);
+  else if (e.key === 'Escape') closePalette();
+});
+$('#palette-list').addEventListener('click', (e) => {
+  const li = e.target.closest('[data-pi]');
+  if (li) runPaletteSelection(Number(li.dataset.pi));
+});
+$('#palette-backdrop').addEventListener('click', closePalette);
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    $('#palette').hidden ? openPalette() : closePalette();
+  }
+});
 
 poll();
 connect();
