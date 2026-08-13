@@ -79,6 +79,26 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Bundled font files only — no traversal, extension whitelisted.
+  if (url.startsWith('/fonts/')) {
+    const name = path.basename(url);
+    if (!/^[\w-]+\.woff2$/.test(name)) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    fs.readFile(path.join(__dirname, 'public', 'fonts', name), (err, buf) => {
+      if (err) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'font/woff2', 'Cache-Control': 'max-age=86400' });
+      res.end(buf);
+    });
+    return;
+  }
+
   if (url === '/api/state') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(collector.state));
