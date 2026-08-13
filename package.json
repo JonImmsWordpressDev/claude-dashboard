@@ -1,0 +1,19 @@
+{
+  "name": "claude-dashboard",
+  "version": "1.0.0",
+  "description": "Local dashboard for Claude Code: live sessions, transcripts, costs, git status — all your projects in one place.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/pure-logic.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JonImmsWordpressDev/claude-dashboard.git"
+  },
+  "author": "Jon Imms (https://jonimms.com)",
+  "license": "MIT"
+}

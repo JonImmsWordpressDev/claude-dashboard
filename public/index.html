@@ -834,6 +834,12 @@ function render(state) {
   patch($('.cards', d), dormant.map(projectCard).join(''));
 
   // tab title = attention signal
+  // collection errors get a subtle amber gear, details live in settings
+  $('#gear').style.color = (state.errors || []).length ? 'var(--warn)' : '';
+  $('#gear').title = (state.errors || []).length
+    ? `${state.errors.length} collection errors — see Diagnostics in settings`
+    : 'Settings';
+
   const waiting = live.filter((s) => s.status === 'waiting').length;
   document.title = waiting ? `(${waiting} waiting) Claude Dashboard`
     : live.length ? `(${live.length} running) Claude Dashboard`
@@ -1212,7 +1218,15 @@ async function openSettings() {
         ${c.claudeApp
           ? '<span style="color:var(--accent);font-size:12px">installed</span>'
           : '<span style="color:var(--faint);font-size:12px">not installed</span> <a href="https://claude.com/download" target="_blank" rel="noopener" class="copy" style="text-decoration:none">get it ⬈</a>'}
+      </div>
+      <div class="set-row">
+        <span class="set-label">Version ${esc(c.version || '?')}<span class="set-sub">checks GitHub only when you click — never automatically</span></span>
+        <span id="set-update-result" style="color:var(--faint);font-size:12px"></span>
+        <button class="copy" id="set-update">check for updates</button>
       </div>`;
+    const diag = (c.errors || []).length
+      ? (c.errors || []).map((e) => `<div class="set-row"><span class="set-label mono" style="font-size:11.5px">${esc(e.message)}<span class="set-sub">${relTime(e.at)}</span></span></div>`).join('')
+      : null;
     const projects = (lastState?.projects || [])
       .map((p) => `
       <div class="set-row">
@@ -1231,7 +1245,20 @@ async function openSettings() {
     $('#d-body').innerHTML =
       dSection('General', general) +
       dSection(`Projects — ${lastState?.projects?.length || 0}`, projects, 'No projects yet.') +
-      dSection(`Hidden — ${(c.ignores || []).length}`, hidden, 'Nothing hidden. The hide buttons above put a project (and its whole subtree) here.');
+      dSection(`Hidden — ${(c.ignores || []).length}`, hidden, 'Nothing hidden. The hide buttons above put a project (and its whole subtree) here.') +
+      dSection(`Diagnostics — ${(c.errors || []).length} recent collection errors`, diag, 'No collection errors. Everything is reading cleanly.');
+    $('#set-update').addEventListener('click', async (e) => {
+      const out = $('#set-update-result');
+      out.textContent = 'checking…';
+      try {
+        const r = await (await fetch('/api/update-check')).json();
+        if (r.error) out.textContent = `couldn't check: ${r.error}`;
+        else if (r.upToDate) out.textContent = `up to date (${r.current})`;
+        else out.innerHTML = `${esc(r.latest)} available — <a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--accent)">release notes</a>, then git pull`;
+      } catch {
+        out.textContent = "couldn't reach GitHub";
+      }
+    });
     $('#set-notify').addEventListener('change', (e) =>
       saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
     $('#set-terminal').addEventListener('change', async (e) => {

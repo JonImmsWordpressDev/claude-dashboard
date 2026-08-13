@@ -21,6 +21,7 @@ const HOST = process.env.CLAUDE_DASH_HOST || '127.0.0.1';
 const DEV = process.env.CLAUDE_DASH_DEV === '1';
 const INDEX = path.join(__dirname, 'public', 'index.html');
 
+const VERSION = require('./package.json').version;
 const collector = new Collector();
 const sseClients = new Set();
 
@@ -107,7 +108,27 @@ const server = http.createServer((req, res) => {
 
   if (url === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, pid: process.pid, uptime: process.uptime() }));
+    res.end(JSON.stringify({ ok: true, pid: process.pid, uptime: process.uptime(), version: VERSION }));
+    return;
+  }
+
+  // Manual only — the dashboard never phones home on its own. This runs
+  // when the user clicks "check for updates" in settings.
+  if (url === '/api/update-check') {
+    fetch('https://api.github.com/repos/JonImmsWordpressDev/claude-dashboard/releases/latest', {
+      headers: { 'User-Agent': 'claude-dashboard', Accept: 'application/vnd.github+json' },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`GitHub responded ${r.status}`))))
+      .then((rel) => {
+        const latest = String(rel.tag_name || '').replace(/^v/, '');
+        json(res, 200, {
+          current: VERSION,
+          latest,
+          upToDate: !latest || latest === VERSION,
+          url: rel.html_url || 'https://github.com/JonImmsWordpressDev/claude-dashboard/releases',
+        });
+      })
+      .catch((e) => json(res, 502, { error: String(e.message).slice(0, 120) }));
     return;
   }
 
@@ -160,6 +181,8 @@ const server = http.createServer((req, res) => {
   if (url === '/api/config' && req.method === 'GET') {
     json(res, 200, {
       ...cfg.readConfig(),
+      version: VERSION,
+      errors: collector.state.errors || [],
       terminals: cfg.detectTerminals(),
       resolvedTerminal: cfg.resolvedTerminal(),
       claudeApp: cfg.detectClaudeApp(),
