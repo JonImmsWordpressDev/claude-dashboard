@@ -2,7 +2,7 @@
 
 A local, zero-dependency dashboard for all your [Claude Code](https://claude.com/claude-code) projects. Live sessions pinned at the top — including whether one is waiting on your input — with a card per project below: recent sessions, git status, a 14-day activity sparkline, and one-click resume commands.
 
-Everything is read from local files under `~/.claude`. No API keys, no external services, nothing leaves your machine, and it never writes to Claude's data — read-only. Plain Node.js (which Claude Code already requires), zero npm dependencies, macOS.
+Everything is read from local files under `~/.claude`, and it never writes to Claude's data — read-only. No API keys to configure. The only automatic network call is to Anthropic's own usage API for your quota meters, authenticated with the Keychain credentials Claude Code already holds (kept in memory, toggleable in settings). Plain Node.js (which Claude Code already requires), zero npm dependencies, macOS.
 
 **Requirements:** macOS (or Windows, experimental — see below), Node.js ≥ 18, Claude Code.
 
@@ -29,7 +29,7 @@ node server.js
 - **Running now** — every live `claude` CLI session. Amber pulse = waiting on your input. Shows the session's current task and elapsed time.
 - **Digest** — what happened across every project, grouped by day. Each entry shows the session's recap (Claude's own "away summary" where one exists — click to expand), how many tasks it completed, and an open button. Switch the window between day / 3 days / week; collapses out of the way and remembers your choice.
 - **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app when it's installed — the **Open in** selector in the header names whichever terminal you've configured (auto-detected on first run). The `⧉` button copies the `claude --resume` command instead.
-- **Header meters** — your plan and rate-limit tier (Free/Pro/Max/Enterprise/API, detected from Claude Code's local account cache), session and weekly usage, plus extra-usage spend.
+- **Header meters** — your plan and rate-limit tier (Free/Pro/Max/Enterprise/API, detected from Claude Code's local account cache), live session and weekly usage from Anthropic's usage API via your existing Claude Code sign-in, plus extra-usage spend. First run may show one macOS Keychain prompt — click Always Allow.
 ![Transcript viewer live-following a running session — this one shows the session that built the dashboard](docs/screenshots/transcript.png)
 
 - **Transcripts** — click any session title (cards, digest, search results, project drawer) to read the conversation: your prompts, Claude's replies rendered as markdown, tool calls as compact one-liners, and away-summaries highlighted. Long sessions show the newest ~1200 events. **Running sessions follow live** — a `● live` badge appears, new turns stream in every few seconds, and the view sticks to the bottom unless you've scrolled up to read.

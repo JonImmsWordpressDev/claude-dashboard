@@ -1240,6 +1240,10 @@ async function openSettings() {
           : '<span style="color:var(--faint);font-size:12px">not installed</span> <a href="https://claude.com/download" target="_blank" rel="noopener" class="copy" style="text-decoration:none">get it ⬈</a>'}
       </div>
       <div class="set-row">
+        <span class="set-label">Usage meters<span class="set-sub">fetches your own usage from Anthropic's API using your Claude Code sign-in (kept in memory) — the dashboard's only automatic network call</span></span>
+        <input type="checkbox" id="set-usage" ${c.usageApi !== false ? 'checked' : ''}>
+      </div>
+      <div class="set-row">
         <span class="set-label">Version ${esc(c.version || '?')}<span class="set-sub">checks GitHub only when you click — never automatically</span></span>
         <span id="set-update-result" style="color:var(--faint);font-size:12px"></span>
         <button class="copy" id="set-update">check for updates</button>
@@ -1281,6 +1285,8 @@ async function openSettings() {
     });
     $('#set-notify').addEventListener('change', (e) =>
       saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
+    $('#set-usage').addEventListener('change', (e) =>
+      saveSetting('/api/config', { usageApi: e.target.checked }, e.target.checked ? 'Usage meters on' : 'Usage meters off — header falls back to the statusline cache'));
     $('#set-terminal').addEventListener('change', async (e) => {
       await saveSetting('/api/config', { terminal: e.target.value }, `Sessions will open in ${e.target.selectedOptions[0].text}`);
       loadOpenPref(); // header label follows the choice
