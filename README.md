@@ -40,6 +40,8 @@ node server.js
 - **New session** — the `⊕` button on a project card opens a fresh terminal window in that project running `claude`.
 - **Cost trend** — the small bar chart in the header is estimated cost per week for the last 8 weeks (hover for numbers). Costs include subagent tokens.
 - **Models everywhere** — every session shows which model ran it (live cards, digest, session lists), and the stats view breaks down usage per model and per project.
+
+![Stats view: activity heatmap, busiest hours, and per-model / per-project cost breakdowns](docs/screenshots/stats.png)
 - **Project details** — click any project's name for a slide-over with its full session list, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools). Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
 - **Unpushed work strip** — an amber band listing every repo with uncommitted changes (`●n`) or unpushed commits (`↑n`), sorted by recent activity. Disappears when everything's clean.
 - **Dormant** — projects with no activity for 60+ days, tucked away at the bottom.
