@@ -473,8 +473,7 @@
   <div class="spacer"></div>
   <label id="open-pref-wrap">Open in
     <select id="open-pref">
-      <option value="terminal">Ghostty</option>
-      <option value="app">Claude app</option>
+      <option value="terminal">Terminal</option>
     </select>
   </label>
   <div id="quota"></div>
@@ -849,10 +848,24 @@ function toast(msg) {
   t._timer = setTimeout(() => t.classList.remove('show'), 1800);
 }
 
-// where "open" launches sessions: terminal (Ghostty) or the Claude desktop app
+// Where "open" launches sessions: the configured terminal (label reflects
+// what will actually launch) or the Claude desktop app when installed.
 const prefEl = $('#open-pref');
-prefEl.value = localStorage.getItem('openTarget') || 'terminal';
 prefEl.addEventListener('change', () => localStorage.setItem('openTarget', prefEl.value));
+
+async function loadOpenPref() {
+  try {
+    const c = await (await fetch('/api/config')).json();
+    const opts = [`<option value="terminal">${esc(c.resolvedTerminal.label)}</option>`];
+    if (c.claudeApp) opts.push('<option value="app">Claude app</option>');
+    prefEl.innerHTML = opts.join('');
+    const stored = localStorage.getItem('openTarget') || 'terminal';
+    prefEl.value = stored === 'app' && !c.claudeApp ? 'terminal' : stored;
+  } catch {
+    prefEl.value = 'terminal';
+  }
+}
+loadOpenPref();
 
 // digest window buttons + expandable summaries + collapsed-state memory
 document.addEventListener('click', (e) => {
@@ -1191,8 +1204,14 @@ async function openSettings() {
       <div class="set-row">
         <span class="set-label">Open sessions in<span class="set-sub">terminal used by open ⬈ and ⊕</span></span>
         <select id="set-terminal">${(c.terminals || [])
-          .map((t) => `<option value="${esc(t.id)}" ${t.id === c.terminal ? 'selected' : ''}>${esc(t.label)}</option>`)
+          .map((t) => `<option value="${esc(t.id)}" ${t.id === c.resolvedTerminal.id ? 'selected' : ''}>${esc(t.label)}</option>`)
           .join('')}</select>
+      </div>
+      <div class="set-row">
+        <span class="set-label">Claude desktop app<span class="set-sub">lets "open" import sessions into the Claude app</span></span>
+        ${c.claudeApp
+          ? '<span style="color:var(--accent);font-size:12px">installed</span>'
+          : '<span style="color:var(--faint);font-size:12px">not installed</span> <a href="https://claude.com/download" target="_blank" rel="noopener" class="copy" style="text-decoration:none">get it ⬈</a>'}
       </div>`;
     const projects = (lastState?.projects || [])
       .map((p) => `
@@ -1215,8 +1234,10 @@ async function openSettings() {
       dSection(`Hidden — ${(c.ignores || []).length}`, hidden, 'Nothing hidden. The hide buttons above put a project (and its whole subtree) here.');
     $('#set-notify').addEventListener('change', (e) =>
       saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
-    $('#set-terminal').addEventListener('change', (e) =>
-      saveSetting('/api/config', { terminal: e.target.value }, `Sessions will open in ${e.target.selectedOptions[0].text}`));
+    $('#set-terminal').addEventListener('change', async (e) => {
+      await saveSetting('/api/config', { terminal: e.target.value }, `Sessions will open in ${e.target.selectedOptions[0].text}`);
+      loadOpenPref(); // header label follows the choice
+    });
     $('#d-body').addEventListener('change', (e) => {
       const input = e.target.closest('[data-rename]');
       if (input) saveSetting('/api/names', { path: input.dataset.rename, name: input.value }, input.value.trim() ? `Renamed to "${input.value.trim()}"` : 'Name reset to default');

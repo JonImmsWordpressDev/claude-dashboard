@@ -28,7 +28,7 @@ node server.js
 
 - **Running now** — every live `claude` CLI session. Amber pulse = waiting on your input. Shows the session's current task and elapsed time.
 - **Digest** — what happened across every project, grouped by day. Each entry shows the session's recap (Claude's own "away summary" where one exists — click to expand), how many tasks it completed, and an open button. Switch the window between day / 3 days / week; collapses out of the way and remembers your choice.
-- **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app — pick your default with the **Open in** selector in the header. The `⧉` button copies the `claude --resume` command instead.
+- **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app when it's installed — the **Open in** selector in the header names whichever terminal you've configured (auto-detected on first run). The `⧉` button copies the `claude --resume` command instead.
 - **Header meters** — session and weekly usage from Claude's own statusline cache, plus extra-usage spend.
 ![Transcript viewer live-following a running session — this one shows the session that built the dashboard](docs/screenshots/transcript.png)
 

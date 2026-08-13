@@ -161,6 +161,8 @@ const server = http.createServer((req, res) => {
     json(res, 200, {
       ...cfg.readConfig(),
       terminals: cfg.detectTerminals(),
+      resolvedTerminal: cfg.resolvedTerminal(),
+      claudeApp: cfg.detectClaudeApp(),
       names: cfg.readNames(),
       ignores: cfg.readIgnores(),
     });
