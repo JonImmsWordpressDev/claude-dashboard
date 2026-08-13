@@ -5,3 +5,4 @@ node_modules/
 names.json
 ignore.json
 config.json
+run-hidden.vbs

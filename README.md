@@ -4,7 +4,7 @@ A local, zero-dependency dashboard for all your [Claude Code](https://claude.com
 
 Everything is read from local files under `~/.claude`. No API keys, no external services, nothing leaves your machine, and it never writes to Claude's data — read-only. Plain Node.js (which Claude Code already requires), zero npm dependencies, macOS.
 
-**Requirements:** macOS, Node.js ≥ 18, Claude Code.
+**Requirements:** macOS (or Windows, experimental — see below), Node.js ≥ 18, Claude Code.
 
 ![Claude Dashboard, dark mode — live sessions, unpushed-work strip, and the daily digest](docs/screenshots/dashboard-dark.png)
 
@@ -93,6 +93,18 @@ Edit `ignore.json` — an array of absolute path prefixes. A project is hidden i
 | `CLAUDE_DASH_HOST` | `127.0.0.1` | Bind address — see below before changing |
 
 The server binds to `127.0.0.1` only by default.
+
+## Windows (experimental — testers wanted)
+
+The core is plain cross-platform Node, and Windows support is wired in: paths handle drive letters, notifications use native toasts, and sessions open in Windows Terminal, PowerShell, or cmd (auto-detected). Install from PowerShell in the repo folder:
+
+```powershell
+.\install.ps1
+```
+
+That registers a logon Scheduled Task ("ClaudeDashboard") running the server hidden. Remove it with `.\uninstall.ps1`. The SwiftBar menu bar companion is macOS-only.
+
+**Honest label: this is untested on real Windows** — it was written carefully on a Mac. If you run it on Windows, please [open an issue](https://github.com/JonImmsWordpressDev/claude-dashboard/issues) with what worked and what didn't; the first Windows tester shapes this.
 
 ## Access from your phone
 

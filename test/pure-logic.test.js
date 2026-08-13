@@ -165,3 +165,25 @@ test('matchesPrefix does not match sibling paths or partial names', () => {
   assert.equal(matchesPrefix('/Users/alex/Local Sites/buildertrend-other', PREFIXES), false);
   assert.equal(matchesPrefix('/Users/alex/Local Sites/north-ave', PREFIXES), false);
 });
+
+// Windows-style paths must canonicalize to forward slashes and group correctly.
+test('canonicalize normalizes Windows paths to forward slashes', () => {
+  assert.equal(canonicalize('C:\\Users\\alex\\projects\\site\\'), 'C:/Users/alex/projects/site');
+  assert.equal(canonicalize('C:/Users/alex/projects/site'), 'C:/Users/alex/projects/site');
+});
+
+test('worktreeRoot folds Windows worktree paths', () => {
+  const r = worktreeRoot('C:\\Users\\alex\\site\\.claude\\worktrees\\brave-fox-1a2b3c');
+  assert.equal(r.root, 'C:/Users/alex/site');
+  assert.equal(r.worktree, 'brave-fox-1a2b3c');
+});
+
+test('encodeProjectDir handles drive letters', () => {
+  assert.equal(encodeProjectDir('C:\\Users\\alex\\my site'), 'C--Users-alex-my-site');
+});
+
+test('matchesPrefix works across separator styles', () => {
+  const prefixes = ['c:/users/alex/old sites'];
+  assert.equal(matchesPrefix('C:\\Users\\alex\\Old Sites\\legacy', prefixes), true);
+  assert.equal(matchesPrefix('C:\\Users\\alex\\other', prefixes), false);
+});
