@@ -23,9 +23,6 @@ sed -e "s|__NODE_PATH__|$NODE_PATH_BIN|g" \
     "$PLIST_SRC" > "$PLIST_DST"
 
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-# migrate installs made under the pre-release label
-launchctl bootout "gui/$(id -u)/com.jonimms.claude-dashboard" 2>/dev/null || true
-rm -f "$HOME/Library/LaunchAgents/com.jonimms.claude-dashboard.plist"
 launchctl bootstrap "gui/$(id -u)" "$PLIST_DST"
 
 echo -n "waiting for server"
