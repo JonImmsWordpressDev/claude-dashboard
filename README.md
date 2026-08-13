@@ -6,6 +6,8 @@ Everything is read from local files under `~/.claude`. No API keys, no external 
 
 **Requirements:** macOS, Node.js ≥ 18, Claude Code.
 
+![Claude Dashboard, dark mode — live sessions, unpushed-work strip, and the daily digest](docs/screenshots/dashboard-dark.png)
+
 ## Install (always-on)
 
 ```bash
@@ -28,6 +30,8 @@ node server.js
 - **Digest** — what happened across every project, grouped by day. Each entry shows the session's recap (Claude's own "away summary" where one exists — click to expand), how many tasks it completed, and an open button. Switch the window between day / 3 days / week; collapses out of the way and remembers your choice.
 - **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app — pick your default with the **Open in** selector in the header. The `⧉` button copies the `claude --resume` command instead.
 - **Header meters** — session and weekly usage from Claude's own statusline cache, plus extra-usage spend.
+![Transcript viewer live-following a running session — this one shows the session that built the dashboard](docs/screenshots/transcript.png)
+
 - **Transcripts** — click any session title (cards, digest, search results, project drawer) to read the conversation: your prompts, Claude's replies rendered as markdown, tool calls as compact one-liners, and away-summaries highlighted. Long sessions show the newest ~1200 events. **Running sessions follow live** — a `● live` badge appears, new turns stream in every few seconds, and the view sticks to the bottom unless you've scrolled up to read.
 - **Search** — the header box searches every prompt you've ever sent plus all session titles (Enter to run, 2+ characters). Results open straight into transcripts.
 - **New session** — the `⊕` button on a project card opens a fresh terminal window in that project running `claude`.
@@ -39,6 +43,8 @@ node server.js
 - **Notifications** — the moment any session flips to "waiting for input", you get a macOS notification (with sound) naming the project. Fires once per wait, never on server restart. Disable with `CLAUDE_DASH_NOTIFY=0` in the plist. Notifications arrive via Script Editor/osascript — if you don't see them, allow it under System Settings → Notifications.
 - **Cost estimates** — the header shows the estimated list-price value of the last 7 days across all projects; each project card and digest entry shows its share. Computed from token usage in the transcripts at Anthropic list rates (cache reads at 0.1×, cache writes at 1.25×). On a subscription plan these are relative weights, not billed dollars — use them to see where your usage goes. Subagent tokens are included.
 - **Stuck flag** — a session that's "busy" but has written nothing to its transcript for 10+ minutes gets an amber `quiet Nm` chip; at 20 minutes you get one notification. It's a hint, not a verdict — a session waiting on slow background work can look the same.
+
+![Light mode — warm paper](docs/screenshots/dashboard-light.png)
 
 ## Menu bar companion
 
