@@ -614,6 +614,16 @@ function statusChip(s) {
   return `<span class="chip"><span class="led"></span>${esc(s.status)}</span>`;
 }
 
+// "claude-fable-5" -> "fable-5"; date-suffixed ids lose the date.
+function modelShort(m) {
+  if (!m) return '';
+  return m.replace(/^claude-/, '').replace(/-\d{8}$/, '');
+}
+
+function modelChip(m) {
+  return m ? `<span class="badge" title="${esc(m)}">${esc(modelShort(m))}</span>` : '';
+}
+
 function fmtCost(usd) {
   if (!usd || usd < 0.005) return '';
   return usd >= 100 ? `$${Math.round(usd)}` : `$${usd.toFixed(2)}`;
@@ -653,6 +663,7 @@ function liveCard(s) {
     <div class="top">
       <span class="proj">${esc(s.projectName)}${s.isWorktree ? ' <span class="badge">worktree</span>' : ''}</span>
       ${statusChip(s)}
+      ${modelChip(s.model)}
       <span class="elapsed">${elapsed(s.startedAt)}</span>
     </div>
     <div class="title" data-session="${esc(s.sessionId)}" style="cursor:pointer" title="Click to watch the transcript live">${esc(s.title || '')}</div>
@@ -667,6 +678,7 @@ function projectCard(p) {
         <li>
           <span class="s-title" data-session="${esc(sess.sessionId)}" title="Click to read the transcript">${
             sess.worktree ? `<span class="wt mono">⎇ ${esc(sess.worktree)}</span>` : ''}${esc(sess.title)}</span>
+          ${modelChip(sess.model)}
           <span class="s-when">${relTime(sess.lastActivityAt)}</span>
           ${openBtn(sess.sessionId)}
           ${copyBtn(sess.resumeCommand)}
@@ -751,6 +763,7 @@ function digestItem(it) {
       <span class="di-proj">${esc(it.project)}</span>
       <span class="di-title" data-session="${esc(it.sessionId)}" title="Click to read the transcript">${it.worktree ? `<span class="wt mono">⎇</span> ` : ''}${esc(it.title)}</span>
       ${running ? '<span class="chip busy"><span class="led"></span>running</span>' : ''}
+      ${modelChip(it.model)}
       ${fmtCost(it.estCost) ? `<span class="di-when" title="Estimated list-price value of this session">≈${fmtCost(it.estCost)}</span>` : ''}
       <span class="di-when">${time}</span>
       ${openBtn(it.sessionId)}
@@ -789,9 +802,16 @@ function render(state) {
   const q = state.quota;
   const qEl = $('#quota');
   const spend = (state.projects || []).reduce((s, p) => s + (p.spend7d || 0), 0);
-  const spendChip = fmtCost(spend)
-    ? `${weeklyChart(state.weeklyCost)}<span title="Estimated list-price value of all sessions in the last 7 days — relative weight, not billed dollars">7d ≈${fmtCost(spend)}</span>`
+  const plan = state.plan;
+  const planChip = plan && plan.label
+    ? `<span class="badge" style="color:var(--accent)" title="${esc([
+        plan.organization, plan.tier && `rate-limit tier: ${plan.tier}`,
+        plan.extraUsage ? 'extra usage enabled' : null,
+      ].filter(Boolean).join(' · '))}">${esc(plan.label)}</span>`
     : '';
+  const spendChip = planChip + (fmtCost(spend)
+    ? `${weeklyChart(state.weeklyCost)}<span title="Estimated list-price value of all sessions in the last 7 days — relative weight, not billed dollars">7d ≈${fmtCost(spend)}</span>`
+    : '');
   if (q) {
     qEl.className = q.stale ? 'stale' : '';
     patch(qEl, spendChip +
@@ -1352,11 +1372,20 @@ async function openStats() {
       <td>${(e.tokens / 1e6).toFixed(1)}M tok</td>
       <td>≈$${e.cost.toFixed(2)}</td>
     </tr>`).join('');
+    const projRows = (s.perProject || []).map((p) => {
+      const parts = Object.entries(p.models)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([m, c]) => `${esc(modelShort(m))} ${Math.round((c / p.total) * 100)}%`)
+        .join(' · ');
+      return `<tr><td>${esc(p.name)}</td><td style="text-align:left;color:var(--muted)">${parts}</td><td>≈$${p.total.toFixed(2)}</td></tr>`;
+    }).join('');
     $('#d-body').innerHTML =
       dSection('Activity — last 26 weeks', `<div class="heat">${cells.join('')}</div>`) +
       dSection('Busiest hours', `<div class="hours">${hourBars}</div>
         <div class="hours-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>`) +
       dSection('By model — all time', models.length ? `<table class="stat-table">${modelRows}</table>` : null, 'No usage recorded yet.') +
+      dSection('Models by project', projRows ? `<table class="stat-table">${projRows}</table>` : null, 'No project usage yet.') +
       `<div class="stat-totals"><strong>${s.totals.sessions}</strong> sessions · <strong>${s.totals.prompts}</strong> prompts · <strong>≈$${s.totals.cost}</strong> estimated list-price value, all time</div>`;
   } catch {
     $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load stats.</div>';
