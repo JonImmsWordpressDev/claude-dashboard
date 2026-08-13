@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+*.log
+# user configuration — copy the .example files to start
+names.json
+ignore.json
+config.json

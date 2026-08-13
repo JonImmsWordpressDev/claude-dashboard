@@ -1,0 +1,1197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Dashboard</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#16181d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2316181d'/%3E%3Ctext x='8' y='12' font-size='11' text-anchor='middle' fill='%233fb8af' font-family='monospace'%3E%E2%9D%AF%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface2: #eceef1;
+    --ink: #1c1e24;
+    --muted: #5c6270;
+    --faint: #8a8f9b;
+    --line: #dcdfe5;
+    --accent: #0d9488;       /* working / activity */
+    --warn: #a16207;         /* waiting on you */
+    --bad: #b91c1c;
+    --chip-bg: #e8eaee;
+    --warn-bg: rgba(161, 98, 7, 0.12);
+    --accent-bg: rgba(13, 148, 136, 0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181d;
+      --surface: #1e2128;
+      --surface2: #262a33;
+      --ink: #e9eaec;
+      --muted: #9298a3;
+      --faint: #6b7280;
+      --line: #2e333d;
+      --accent: #3fb8af;
+      --warn: #e0a63a;
+      --bad: #e5534b;
+      --chip-bg: #262a33;
+      --warn-bg: rgba(224, 166, 58, 0.13);
+      --accent-bg: rgba(63, 184, 175, 0.10);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding-bottom: 48px;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.01em; }
+  header h1 .tilde { color: var(--accent); font-family: ui-monospace, "SF Mono", Menlo, monospace; margin-right: 6px; }
+  #conn {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--faint); flex: none;
+  }
+  #conn.on { background: var(--accent); }
+  #conn.retry { background: var(--warn); }
+  .spacer { flex: 1; }
+
+  #quota { display: flex; gap: 18px; align-items: center; font-size: 12px; color: var(--muted); }
+  #quota.stale { opacity: 0.45; }
+  .meter { display: flex; align-items: center; gap: 7px; }
+  .meter .bar {
+    width: 72px; height: 5px; border-radius: 3px;
+    background: var(--surface2); overflow: hidden;
+  }
+  .meter .fill { height: 100%; border-radius: 3px; background: var(--accent); }
+  .meter .fill.hot { background: var(--warn); }
+  .meter .fill.crit { background: var(--bad); }
+
+  /* ---------- live rail ---------- */
+  #live {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg);
+    padding: 14px 20px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  #live .rail-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--faint); margin-bottom: 9px;
+  }
+  #live .cards { display: flex; gap: 12px; overflow-x: auto; }
+  .live-card {
+    flex: 0 0 auto; min-width: 300px; max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 11px 14px;
+  }
+  .live-card.waiting { border-left-color: var(--warn); }
+  .live-card .top { display: flex; align-items: baseline; gap: 9px; }
+  .live-card .proj { font-weight: 600; font-size: 14px; }
+  .live-card .elapsed { color: var(--faint); font-size: 12px; margin-left: auto; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: var(--accent-bg); color: var(--accent);
+    white-space: nowrap;
+  }
+  .chip.waiting { background: var(--warn-bg); color: var(--warn); }
+  .chip .led {
+    width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  }
+  .chip.busy .led { animation: pulse 1.6s ease-in-out infinite; }
+  .chip.waiting .led { animation: pulse 0.9s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+  @media (prefers-reduced-motion: reduce) { .led { animation: none !important; } }
+  .live-card .title { font-size: 13px; color: var(--muted); margin-top: 6px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live-card .task {
+    margin-top: 7px; font-size: 12px; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .live-card .task .prompt-ch { color: var(--accent); margin-right: 6px; }
+  .live-card .task .count { color: var(--faint); margin-left: 6px; }
+  .live-card .foot { display: flex; align-items: center; margin-top: 9px; gap: 8px; }
+  .live-none { color: var(--faint); font-size: 13px; }
+  .live-none code { color: var(--muted); }
+
+  /* ---------- project grid ---------- */
+  main { padding: 18px 20px; }
+  #grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px 10px;
+    display: flex; flex-direction: column;
+  }
+  .card .head { display: flex; align-items: center; gap: 8px; }
+  .card .name { font-weight: 600; font-size: 15px; }
+  .card .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+  .card .spark { margin-left: auto; }
+  .card .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 7px; font-size: 11px; }
+  .badge {
+    padding: 1px 7px; border-radius: 9px; background: var(--chip-bg); color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+  }
+  .badge.dirty { color: var(--warn); }
+  .badge.ahead { color: var(--accent); }
+  .badge.err { color: var(--bad); }
+  .badge.missing { color: var(--bad); }
+  .card .when { color: var(--faint); font-size: 11px; margin-left: auto; }
+  .sessions { list-style: none; padding: 0; margin: 10px 0 0; border-top: 1px solid var(--line); }
+  .sessions li {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 0; border-bottom: 1px solid var(--line);
+    font-size: 12.5px;
+  }
+  .sessions li:last-child { border-bottom: none; }
+  .sessions .s-title {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--ink); flex: 1;
+  }
+  .sessions .s-title .wt { color: var(--accent); font-size: 11px; margin-right: 5px; }
+  .sessions .s-when { color: var(--faint); font-size: 11px; flex: none; }
+  .copy {
+    flex: none; border: none; background: none; color: var(--faint);
+    font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 5px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .copy:hover { background: var(--surface2); color: var(--ink); }
+  .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .open-btn { color: var(--accent); }
+  #open-pref-wrap { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  #open-pref {
+    font: inherit; color: var(--ink);
+    background: var(--surface2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 2px 6px;
+  }
+  #search {
+    font: 12.5px -apple-system, sans-serif; color: var(--ink);
+    background: var(--surface2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 4px 10px; width: 190px; margin-left: 14px;
+  }
+  #search:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  #search::placeholder { color: var(--faint); }
+  #gear {
+    border: none; background: none; color: var(--muted); cursor: pointer;
+    font-size: 15px; padding: 2px 6px; border-radius: 6px; margin-left: 4px;
+  }
+  #gear:hover { background: var(--surface2); color: var(--ink); }
+
+  /* settings drawer */
+  .set-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .set-row:last-child { border-bottom: none; }
+  .set-row .set-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .set-row .set-sub { color: var(--faint); font-size: 11px; display: block;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .set-row input[type="text"] {
+    font: 12.5px -apple-system, sans-serif; color: var(--ink);
+    background: var(--surface2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 8px; width: 170px;
+  }
+  .set-row select {
+    font: inherit; color: var(--ink); background: var(--surface2);
+    border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px;
+  }
+  .set-row input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+
+  /* clickable session titles */
+  .s-title[data-session], .di-title[data-session] { cursor: pointer; }
+  .s-title[data-session]:hover, .di-title[data-session]:hover { color: var(--accent); }
+
+  /* transcript rendering */
+  .t-turn { margin: 10px 0; }
+  .t-user {
+    background: var(--accent-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 12px; font-size: 13px;
+    white-space: pre-wrap; overflow-wrap: break-word;
+  }
+  .t-user .t-who { color: var(--accent); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; display: block; margin-bottom: 3px; }
+  .t-tool {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
+    color: var(--muted); padding: 1px 0 1px 10px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .t-tool .t-tname { color: var(--accent); }
+  .t-note {
+    border-left: 3px solid var(--warn); padding: 6px 10px; margin: 10px 0;
+    color: var(--muted); font-size: 12.5px; background: var(--warn-bg); border-radius: 0 6px 6px 0;
+  }
+  .t-ts { color: var(--faint); font-size: 10px; margin: 12px 0 2px; }
+
+  /* header weekly trend */
+  #wk-chart rect:hover { opacity: 0.75; }
+  .none-yet { color: var(--faint); font-size: 12px; padding: 10px 0 4px; }
+
+  /* ---------- git attention strip ---------- */
+  #git-attn {
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px;
+    background: var(--warn-bg);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px; margin-bottom: 16px;
+    font-size: 12.5px;
+  }
+  #git-attn .ga-label { color: var(--warn); font-weight: 600; white-space: nowrap; }
+  #git-attn .ga-item { color: var(--ink); white-space: nowrap; }
+  #git-attn .ga-item .badge { margin-left: 4px; }
+
+  /* ---------- digest ---------- */
+  #digest { margin-bottom: 20px; }
+  #digest summary {
+    cursor: pointer; user-select: none; list-style: none;
+    display: flex; align-items: center; gap: 12px;
+  }
+  #digest summary::-webkit-details-marker { display: none; }
+  #digest-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--faint);
+  }
+  #digest-label::before { content: '▸ '; }
+  #digest[open] #digest-label::before { content: '▾ '; }
+  #digest-range { display: none; gap: 2px; }
+  #digest[open] #digest-range { display: inline-flex; }
+  #digest-range button {
+    font: 11px -apple-system, sans-serif; color: var(--muted);
+    background: none; border: 1px solid var(--line); cursor: pointer;
+    padding: 2px 9px;
+  }
+  #digest-range button:first-child { border-radius: 6px 0 0 6px; }
+  #digest-range button:last-child { border-radius: 0 6px 6px 0; }
+  #digest-range button.sel { background: var(--surface2); color: var(--ink); }
+  #digest-body { margin-top: 10px; }
+  .digest-day { color: var(--faint); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.06em; margin: 14px 0 6px; }
+  .digest-item {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 8px;
+  }
+  .digest-item .di-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .digest-item .di-proj { font-weight: 600; font-size: 13px; }
+  .digest-item .di-title { color: var(--muted); font-size: 13px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 140px; }
+  .digest-item .di-when { color: var(--faint); font-size: 11px; }
+  .digest-item .di-summary {
+    margin-top: 6px; font-size: 12.5px; color: var(--ink); line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    cursor: pointer;
+  }
+  .digest-item .di-summary.expanded { display: block; }
+  .digest-item .di-tasks { margin-top: 5px; font-size: 11px; color: var(--faint); }
+  .digest-item .di-tasks .done { color: var(--accent); }
+  .digest-empty { color: var(--faint); font-size: 12.5px; padding: 6px 0; }
+
+  /* ---------- dormant ---------- */
+  #dormant { margin-top: 26px; }
+  #dormant summary {
+    cursor: pointer; color: var(--faint); font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.08em; user-select: none;
+  }
+  #dormant .cards { margin-top: 12px; display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+  #dormant .card { opacity: 0.75; }
+
+  /* ---------- project detail drawer ---------- */
+  #drawer-backdrop {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(0, 0, 0, 0.35);
+  }
+  /* display:flex below would otherwise override the hidden attribute */
+  #drawer[hidden], #drawer-backdrop[hidden] { display: none !important; }
+  #drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 21;
+    width: min(760px, 92vw);
+    background: var(--bg); border-left: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.25);
+  }
+  #drawer .d-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 16px 22px 12px; border-bottom: 1px solid var(--line);
+  }
+  #drawer .d-head h2 { font-size: 17px; }
+  #drawer .d-head .d-path {
+    color: var(--faint); font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+  }
+  #drawer .d-close {
+    border: none; background: none; color: var(--muted); cursor: pointer;
+    font-size: 18px; padding: 2px 8px; border-radius: 6px;
+  }
+  #drawer .d-close:hover { background: var(--surface2); color: var(--ink); }
+  #drawer .d-body { overflow-y: auto; padding: 6px 22px 40px; }
+  .d-section { margin-top: 18px; }
+  .d-section > summary {
+    cursor: pointer; user-select: none; list-style: none;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--faint); padding: 4px 0;
+  }
+  .d-section > summary::before { content: '▸ '; }
+  .d-section[open] > summary::before { content: '▾ '; }
+  .d-section .d-empty { color: var(--faint); font-size: 12.5px; padding: 4px 0; }
+  .d-file {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 16px; margin-top: 8px;
+  }
+  .d-file .d-file-name {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px; color: var(--accent); margin-bottom: 6px;
+  }
+  .d-sessions li { display: flex; align-items: center; gap: 8px;
+    padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .d-sessions li:last-child { border-bottom: none; }
+  .d-sessions { list-style: none; padding: 0; margin: 6px 0 0; }
+
+  /* rendered markdown */
+  .md { font-size: 13px; line-height: 1.55; color: var(--ink); overflow-wrap: break-word; }
+  .md h1, .md h2, .md h3, .md h4 { margin: 12px 0 4px; line-height: 1.3; }
+  .md h1 { font-size: 15px; } .md h2 { font-size: 14px; } .md h3, .md h4 { font-size: 13px; }
+  .md p { margin: 6px 0; }
+  .md ul, .md ol { margin: 6px 0; padding-left: 22px; }
+  .md li { margin: 2px 0; }
+  .md code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+    background: var(--surface2); padding: 1px 4px; border-radius: 4px;
+  }
+  .md pre {
+    background: var(--surface2); border-radius: 6px; padding: 10px 12px;
+    overflow-x: auto; margin: 8px 0;
+  }
+  .md pre code { background: none; padding: 0; }
+  .md blockquote { border-left: 3px solid var(--line); margin: 6px 0; padding-left: 10px; color: var(--muted); }
+  .md a { color: var(--accent); }
+  .md hr { border: none; border-top: 1px solid var(--line); margin: 10px 0; }
+
+  #toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--bg);
+    padding: 7px 14px; border-radius: 7px; font-size: 12.5px;
+    opacity: 0; transition: opacity 0.18s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <div id="conn" title="connection"></div>
+  <h1><span class="tilde">❯</span>Claude Dashboard</h1>
+  <input id="search" type="search" placeholder="Search sessions…  ⏎" autocomplete="off">
+  <div class="spacer"></div>
+  <label id="open-pref-wrap">Open in
+    <select id="open-pref">
+      <option value="terminal">Ghostty</option>
+      <option value="app">Claude app</option>
+    </select>
+  </label>
+  <div id="quota"></div>
+  <button id="gear" title="Settings">⚙</button>
+</header>
+
+<section id="live"></section>
+<main>
+  <div id="git-attn" hidden></div>
+  <details id="digest" open>
+    <summary>
+      <span id="digest-label">Digest</span>
+      <span id="digest-range" role="group" aria-label="digest window">
+        <button data-days="1">day</button><button data-days="3">3 days</button><button data-days="7">week</button>
+      </span>
+    </summary>
+    <div id="digest-body"></div>
+  </details>
+  <div id="grid"></div>
+  <details id="dormant" hidden>
+    <summary></summary>
+    <div class="cards"></div>
+  </details>
+</main>
+<div id="toast"></div>
+<div id="drawer-backdrop" hidden></div>
+<aside id="drawer" hidden>
+  <div class="d-head">
+    <h2 id="d-title"></h2>
+    <span class="d-path" id="d-path"></span>
+    <button class="d-close" id="d-close" title="Close (Esc)">✕</button>
+  </div>
+  <div class="d-body" id="d-body"></div>
+</aside>
+
+<script>
+'use strict';
+
+const $ = (s, el) => (el || document).querySelector(s);
+
+// Write innerHTML only when the generated HTML actually changed — rebuilding
+// identical DOM every SSE tick is what caused hover flicker.
+function patch(el, html) {
+  if (el._h !== html) {
+    el._h = html;
+    el.innerHTML = html;
+  }
+}
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function relTime(ms) {
+  if (!ms) return '';
+  const d = Date.now() - ms;
+  const m = Math.floor(d / 60000);
+  if (m < 1) return 'now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  const days = Math.floor(h / 24);
+  if (days < 30) return days + 'd ago';
+  const mo = Math.floor(days / 30);
+  return mo + 'mo ago';
+}
+
+function elapsed(ms) {
+  if (!ms) return '';
+  const s = Math.floor((Date.now() - ms) / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+// 14-day activity sparkline: thin columns, native tooltips per day.
+function sparkSVG(counts) {
+  const w = 84, h = 26, n = counts.length, bw = 4, gap = (w - n * bw) / (n - 1);
+  const max = Math.max(1, ...counts);
+  let bars = '';
+  for (let i = 0; i < n; i++) {
+    const v = counts[i];
+    const bh = v ? Math.max(3, Math.round((v / max) * (h - 4))) : 2;
+    const x = Math.round(i * (bw + gap));
+    const day = new Date(Date.now() - (n - 1 - i) * 86400000);
+    const label = `${day.getMonth() + 1}/${day.getDate()}: ${v} prompt${v === 1 ? '' : 's'}`;
+    bars += `<rect x="${x}" y="${h - bh}" width="${bw}" height="${bh}" rx="1.5"
+      fill="${v ? 'var(--accent)' : 'var(--line)'}"><title>${esc(label)}</title></rect>`;
+  }
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"
+    aria-label="prompts per day, last 14 days">${bars}</svg>`;
+}
+
+// 8-week cost trend, one bar per week, oldest left.
+function weeklyChart(weeks) {
+  if (!weeks || !weeks.some((v) => v > 0)) return '';
+  const w = 62, h = 20, bw = 5, n = weeks.length, gap = (w - n * bw) / (n - 1);
+  const max = Math.max(...weeks);
+  let bars = '';
+  for (let i = 0; i < n; i++) {
+    const v = weeks[i];
+    const bh = v ? Math.max(2, Math.round((v / max) * (h - 2))) : 1;
+    const x = Math.round(i * (bw + gap));
+    const ago = n - 1 - i;
+    const label = `${ago === 0 ? 'this week' : ago === 1 ? 'last week' : ago + ' weeks ago'}: ≈$${v.toFixed(0)}`;
+    bars += `<rect x="${x}" y="${h - bh}" width="${bw}" height="${bh}" rx="1.5"
+      fill="${v ? 'var(--accent)' : 'var(--line)'}"><title>${esc(label)}</title></rect>`;
+  }
+  return `<svg id="wk-chart" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"
+    aria-label="estimated cost per week, last 8 weeks">${bars}</svg>`;
+}
+
+function meter(label, pct, title) {
+  const cls = pct >= 90 ? 'crit' : pct >= 75 ? 'hot' : '';
+  return `<div class="meter" title="${esc(title || '')}">
+    <span>${esc(label)}</span>
+    <span class="bar"><span class="fill ${cls}" style="width:${Math.min(100, pct)}%"></span></span>
+    <span>${Math.round(pct)}%</span>
+  </div>`;
+}
+
+function statusChip(s) {
+  if (s.status === 'waiting') {
+    return `<span class="chip waiting"><span class="led"></span>${esc(s.waitingFor || 'waiting')}</span>`;
+  }
+  if (s.status === 'busy') {
+    const quiet = s.quietMin
+      ? ` <span class="chip waiting" title="Busy but no transcript output for ${s.quietMin} minutes — may be stalled">quiet ${s.quietMin}m</span>`
+      : '';
+    return `<span class="chip busy"><span class="led"></span>busy</span>${quiet}`;
+  }
+  return `<span class="chip"><span class="led"></span>${esc(s.status)}</span>`;
+}
+
+function fmtCost(usd) {
+  if (!usd || usd < 0.005) return '';
+  return usd >= 100 ? `$${Math.round(usd)}` : `$${usd.toFixed(2)}`;
+}
+
+function copyBtn(cmd) {
+  return `<button class="copy" data-cmd="${esc(cmd)}" title="Copy resume command">⧉</button>`;
+}
+
+// Live sessions are already open somewhere; only offer open on idle ones.
+let liveIds = new Set();
+function openBtn(sessionId) {
+  if (liveIds.has(sessionId)) return '';
+  return `<button class="copy open-btn" data-open="${esc(sessionId)}" title="Open this session">open ⬈</button>`;
+}
+
+function gitBadges(git, missing) {
+  const out = [];
+  if (missing) out.push('<span class="badge missing">path missing</span>');
+  if (!git || !git.isRepo) return out.join('');
+  if (git.branch) out.push(`<span class="badge">${esc(git.branch)}</span>`);
+  const changes = (git.dirty || 0) + (git.untracked || 0);
+  if (changes) out.push(`<span class="badge dirty">●${changes}</span>`);
+  if (git.ahead) out.push(`<span class="badge ahead">↑${git.ahead}</span>`);
+  if (git.behind) out.push(`<span class="badge">↓${git.behind}</span>`);
+  if (git.error) out.push(`<span class="badge err" title="${esc(git.error)}">git !</span>`);
+  return out.join('');
+}
+
+function liveCard(s) {
+  const task = s.currentTask
+    ? `<div class="task mono"><span class="prompt-ch">❯</span>${esc(s.currentTask.activeForm)}${
+        s.tasksSummary ? `<span class="count">${s.tasksSummary.completed}/${
+          s.tasksSummary.completed + s.tasksSummary.inProgress + s.tasksSummary.pending}</span>` : ''}</div>`
+    : '';
+  return `<div class="live-card ${s.status === 'waiting' ? 'waiting' : ''}">
+    <div class="top">
+      <span class="proj">${esc(s.projectName)}${s.isWorktree ? ' <span class="badge">worktree</span>' : ''}</span>
+      ${statusChip(s)}
+      <span class="elapsed">${elapsed(s.startedAt)}</span>
+    </div>
+    <div class="title" data-session="${esc(s.sessionId)}" style="cursor:pointer" title="Click to watch the transcript live">${esc(s.title || '')}</div>
+    ${task}
+    <div class="foot">${copyBtn(s.resumeCommand)}</div>
+  </div>`;
+}
+
+function projectCard(p) {
+  const sessions = p.sessions.length
+    ? `<ul class="sessions">${p.sessions.map((sess) => `
+        <li>
+          <span class="s-title" data-session="${esc(sess.sessionId)}" title="Click to read the transcript">${
+            sess.worktree ? `<span class="wt mono">⎇ ${esc(sess.worktree)}</span>` : ''}${esc(sess.title)}</span>
+          <span class="s-when">${relTime(sess.lastActivityAt)}</span>
+          ${openBtn(sess.sessionId)}
+          ${copyBtn(sess.resumeCommand)}
+        </li>`).join('')}</ul>`
+    : '<div class="none-yet">No sessions recorded.</div>';
+  return `<div class="card">
+    <div class="head">
+      ${p.isLive ? '<span class="live-dot" title="session running"></span>' : ''}
+      <span class="name" data-detail="${esc(p.path)}" style="cursor:pointer" title="Click for project details">${esc(p.name)}</span>
+      <button class="copy" data-new="${esc(p.path)}" title="Start a new Claude session here (Ghostty)">⊕</button>
+      ${sparkSVG(p.activity.counts)}
+    </div>
+    <div class="meta">
+      ${gitBadges(p.git, p.missing)}
+      ${fmtCost(p.spend7d) ? `<span class="badge" title="Estimated list-price value of the last 7 days of sessions">≈${fmtCost(p.spend7d)}/7d</span>` : ''}
+      <span class="when" title="${esc(p.path)}">${relTime(p.lastActivityAt)}</span>
+    </div>
+    ${sessions}
+  </div>`;
+}
+
+const DORMANT_MS = 60 * 24 * 60 * 60 * 1000;
+
+// ---------- git attention strip: repos with work sitting unpushed ----------
+function renderGitAttention(state) {
+  const el = $('#git-attn');
+  const items = [];
+  for (const p of state.projects || []) {
+    const g = p.git;
+    if (!g || !g.isRepo) continue;
+    const changes = (g.dirty || 0) + (g.untracked || 0);
+    const ahead = g.ahead || 0;
+    if (!changes && !ahead) continue;
+    items.push({ name: p.name, changes, ahead, when: p.lastActivityAt });
+  }
+  if (!items.length) {
+    el.hidden = true;
+    return;
+  }
+  items.sort((a, b) => (b.when || 0) - (a.when || 0));
+  el.hidden = false;
+  patch(el,
+    `<span class="ga-label">Unpushed work — ${items.length} repo${items.length === 1 ? '' : 's'}</span>` +
+    items.map((it) => `<span class="ga-item">${esc(it.name)}${
+      it.changes ? `<span class="badge dirty" title="${it.changes} uncommitted/untracked files">●${it.changes}</span>` : ''}${
+      it.ahead ? `<span class="badge ahead" title="${it.ahead} commits not pushed">↑${it.ahead}</span>` : ''}</span>`).join(''));
+}
+
+// ---------- digest: what happened recently, across every project ----------
+let digestDays = Number(localStorage.getItem('digestDays')) || 1;
+
+function dayLabel(ms) {
+  const d = new Date(ms), today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayStart = new Date(d); dayStart.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - dayStart) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
+function digestEntries(state) {
+  const cutoff = Date.now() - digestDays * 86400000;
+  const items = [];
+  for (const p of state.projects || []) {
+    for (const sess of p.sessions) {
+      if (!sess.lastActivityAt || sess.lastActivityAt < cutoff) continue;
+      items.push({ project: p.name, ...sess });
+    }
+  }
+  items.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+  return items;
+}
+
+function digestItem(it) {
+  const t = it.tasksSummary;
+  const total = t ? t.completed + t.inProgress + t.pending : 0;
+  const running = liveIds.has(it.sessionId);
+  const time = new Date(it.lastActivityAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `<div class="digest-item">
+    <div class="di-top">
+      <span class="di-proj">${esc(it.project)}</span>
+      <span class="di-title" data-session="${esc(it.sessionId)}" title="Click to read the transcript">${it.worktree ? `<span class="wt mono">⎇</span> ` : ''}${esc(it.title)}</span>
+      ${running ? '<span class="chip busy"><span class="led"></span>running</span>' : ''}
+      ${fmtCost(it.estCost) ? `<span class="di-when" title="Estimated list-price value of this session">≈${fmtCost(it.estCost)}</span>` : ''}
+      <span class="di-when">${time}</span>
+      ${openBtn(it.sessionId)}
+    </div>
+    ${it.awaySummary ? `<div class="di-summary" title="Click to expand">${esc(it.awaySummary)}</div>` : ''}
+    ${total ? `<div class="di-tasks"><span class="done">${t.completed}</span>/${total} tasks done${
+      t.inProgress ? `, ${t.inProgress} in progress` : ''}${
+      t.pending ? `, ${t.pending} left` : ''}</div>` : ''}
+  </div>`;
+}
+
+function renderDigest(state) {
+  const items = digestEntries(state);
+  const label = $('#digest-label');
+  label.textContent = `Digest — ${items.length} session${items.length === 1 ? '' : 's'}`;
+  for (const b of document.querySelectorAll('#digest-range button')) {
+    b.classList.toggle('sel', Number(b.dataset.days) === digestDays);
+  }
+  if (!items.length) {
+    patch($('#digest-body'), `<div class="digest-empty">Quiet — no sessions in the last ${
+      digestDays === 1 ? 'day' : digestDays + ' days'}.</div>`);
+    return;
+  }
+  let html = '', lastDay = '';
+  for (const it of items) {
+    const day = dayLabel(it.lastActivityAt);
+    if (day !== lastDay) { html += `<div class="digest-day">${esc(day)}</div>`; lastDay = day; }
+    html += digestItem(it);
+  }
+  patch($('#digest-body'), html);
+}
+
+function render(state) {
+  liveIds = new Set((state.liveSessions || []).map((s) => s.sessionId));
+  // quota
+  const q = state.quota;
+  const qEl = $('#quota');
+  const spend = (state.projects || []).reduce((s, p) => s + (p.spend7d || 0), 0);
+  const spendChip = fmtCost(spend)
+    ? `${weeklyChart(state.weeklyCost)}<span title="Estimated list-price value of all sessions in the last 7 days — relative weight, not billed dollars">7d ≈${fmtCost(spend)}</span>`
+    : '';
+  if (q) {
+    qEl.className = q.stale ? 'stale' : '';
+    patch(qEl, spendChip +
+      (q.utilization != null ? meter('session', q.utilization, q.resetsAt ? 'resets ' + q.resetsAt : '') : '') +
+      (q.weeklyUtilization != null ? meter('week', q.weeklyUtilization, q.weeklyResetsAt ? 'resets ' + q.weeklyResetsAt : '') : '') +
+      (q.costUsed != null && q.costLimit ? `<span title="extra usage">$${q.costUsed.toFixed(0)}/$${q.costLimit.toFixed(0)}</span>` : ''));
+  } else {
+    qEl.className = '';
+    patch(qEl, spendChip);
+  }
+
+  // live rail
+  const live = state.liveSessions || [];
+  patch($('#live'),
+    `<div class="rail-label">Running now — ${live.length || 'none'}</div>` +
+    (live.length
+      ? `<div class="cards">${live.map(liveCard).join('')}</div>`
+      : `<div class="live-none">No sessions running. Start one with <code class="mono">claude</code> in any project.</div>`));
+
+  renderGitAttention(state);
+  renderDigest(state);
+
+  // grid + dormant
+  const now = Date.now();
+  const active = [], dormant = [];
+  for (const p of state.projects || []) {
+    const isDormant = !p.isLive && (!p.lastActivityAt || now - p.lastActivityAt > DORMANT_MS);
+    (isDormant ? dormant : active).push(p);
+  }
+  patch($('#grid'), active.map(projectCard).join(''));
+  const d = $('#dormant');
+  d.hidden = dormant.length === 0;
+  $('summary', d).textContent = `Dormant — ${dormant.length} project${dormant.length === 1 ? '' : 's'}`;
+  patch($('.cards', d), dormant.map(projectCard).join(''));
+
+  // tab title = attention signal
+  const waiting = live.filter((s) => s.status === 'waiting').length;
+  document.title = waiting ? `(${waiting} waiting) Claude Dashboard`
+    : live.length ? `(${live.length} running) Claude Dashboard`
+    : 'Claude Dashboard';
+}
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// where "open" launches sessions: terminal (Ghostty) or the Claude desktop app
+const prefEl = $('#open-pref');
+prefEl.value = localStorage.getItem('openTarget') || 'terminal';
+prefEl.addEventListener('change', () => localStorage.setItem('openTarget', prefEl.value));
+
+// digest window buttons + expandable summaries + collapsed-state memory
+document.addEventListener('click', (e) => {
+  const rangeBtn = e.target.closest('#digest-range button');
+  if (rangeBtn) {
+    e.preventDefault(); // don't toggle the <details>
+    digestDays = Number(rangeBtn.dataset.days);
+    localStorage.setItem('digestDays', String(digestDays));
+    if (lastState) renderDigest(lastState);
+    return;
+  }
+  const sum = e.target.closest('.di-summary');
+  if (sum) sum.classList.toggle('expanded');
+});
+const digestEl = $('#digest');
+digestEl.open = localStorage.getItem('digestOpen') !== '0';
+digestEl.addEventListener('toggle', () => localStorage.setItem('digestOpen', digestEl.open ? '1' : '0'));
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.copy');
+  if (!btn) return;
+  if (btn.dataset.open) {
+    const target = prefEl.value;
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: btn.dataset.open, target }),
+      });
+      const out = await r.json();
+      toast(out.ok
+        ? `Opening in ${target === 'app' ? 'Claude app' : 'Ghostty'}…`
+        : `Couldn't open: ${out.error}`);
+    } catch {
+      toast("Couldn't reach the server");
+    }
+    btn.disabled = false;
+    return;
+  }
+  navigator.clipboard.writeText(btn.dataset.cmd).then(() => toast('Resume command copied'));
+});
+
+// ---------- data flow: first paint from /api/state, then SSE, 60s poll fallback ----------
+let lastState = null;
+
+async function poll() {
+  try {
+    const r = await fetch('/api/state');
+    lastState = await r.json();
+    render(lastState);
+  } catch { /* server briefly down; SSE retry will recover */ }
+}
+
+function connect() {
+  const es = new EventSource('/api/events');
+  es.addEventListener('state', (e) => {
+    $('#conn').className = 'on';
+    lastState = JSON.parse(e.data);
+    render(lastState);
+  });
+  es.onopen = () => { $('#conn').className = 'on'; };
+  es.onerror = () => { $('#conn').className = 'retry'; };
+}
+
+// ---------- project detail drawer ----------
+// Minimal markdown renderer: escape everything first, then transform.
+// Covers headings, fenced code, inline code, bold/italic, links, lists,
+// blockquotes, and hr — enough for CLAUDE.md and memory files.
+function mdInline(s) {
+  return s
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+
+function renderMd(raw) {
+  // Frontmatter is metadata, not prose — drop it before rendering.
+  raw = raw.replace(/^---\n[\s\S]*?\n---\n/, '');
+  const lines = esc(raw).split('\n');
+  const out = [];
+  let list = null, para = [], code = null;
+  const flushPara = () => { if (para.length) { out.push(`<p>${mdInline(para.join(' '))}</p>`); para = []; } };
+  const flushList = () => { if (list) { out.push(`<${list.tag}>${list.items.join('')}</${list.tag}>`); list = null; } };
+  for (const line of lines) {
+    if (code !== null) {
+      if (/^```/.test(line)) { out.push(`<pre><code>${code.join('\n')}</code></pre>`); code = null; }
+      else code.push(line);
+      continue;
+    }
+    if (/^```/.test(line)) { flushPara(); flushList(); code = []; continue; }
+    const h = line.match(/^(#{1,4})\s+(.*)/);
+    if (h) { flushPara(); flushList(); out.push(`<h${h[1].length}>${mdInline(h[2])}</h${h[1].length}>`); continue; }
+    if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flushPara(); flushList(); out.push('<hr>'); continue; }
+    const li = line.match(/^\s*(?:[-*+]|(\d+)\.)\s+(.*)/);
+    if (li) {
+      flushPara();
+      const tag = li[1] ? 'ol' : 'ul';
+      if (!list || list.tag !== tag) { flushList(); list = { tag, items: [] }; }
+      list.items.push(`<li>${mdInline(li[2])}</li>`);
+      continue;
+    }
+    if (/^\s*&gt;\s?/.test(line)) { flushPara(); flushList(); out.push(`<blockquote>${mdInline(line.replace(/^\s*&gt;\s?/, ''))}</blockquote>`); continue; }
+    if (!line.trim()) { flushPara(); flushList(); continue; }
+    para.push(line.trim());
+  }
+  flushPara(); flushList();
+  if (code !== null) out.push(`<pre><code>${code.join('\n')}</code></pre>`);
+  return `<div class="md">${out.join('')}</div>`;
+}
+
+function dSection(title, inner, empty) {
+  return `<details class="d-section" open><summary>${esc(title)}</summary>${
+    inner || `<div class="d-empty">${esc(empty)}</div>`}</details>`;
+}
+
+function dFiles(files, nameKey) {
+  return files.map((f) => `<div class="d-file">
+    <div class="d-file-name">${esc(f[nameKey] || f.name)}${f.description ? ` — <span style="color:var(--muted)">${esc(f.description)}</span>` : ''}</div>
+    ${f.content ? renderMd(f.content) : ''}
+  </div>`).join('');
+}
+
+function renderDetail(d, name) {
+  $('#d-title').textContent = name;
+  $('#d-path').textContent = d.path;
+  const sessions = d.sessions.length
+    ? `<ul class="d-sessions">${d.sessions.map((s) => `
+        <li>
+          <span class="s-title" data-session="${esc(s.sessionId)}" title="Click to read the transcript">${
+            s.worktree ? `<span class="wt mono">⎇ ${esc(s.worktree)}</span> ` : ''}${esc(s.title)}</span>
+          ${fmtCost(s.estCost) ? `<span class="s-when">≈${fmtCost(s.estCost)}</span>` : ''}
+          <span class="s-when">${relTime(s.lastActivityAt)}</span>
+          ${openBtn(s.sessionId)}
+          ${copyBtn(s.resumeCommand)}
+        </li>`).join('')}</ul>`
+    : null;
+  const caps = [...d.skills, ...d.agents.map((a) => ({ ...a, name: `agent: ${a.name}` })),
+    ...d.commands.map((c) => ({ ...c, name: `/${c.name}` }))];
+  const settingsEntries = [];
+  if (d.settings.mcpServers) settingsEntries.push(`<div class="d-file"><div class="d-file-name">MCP servers</div><div class="md"><p>${d.settings.mcpServers.map(esc).join(', ')}</p></div></div>`);
+  if (d.settings.allowedTools) settingsEntries.push(`<div class="d-file"><div class="d-file-name">allowed tools</div><div class="md"><p>${d.settings.allowedTools.map((t) => `<code>${esc(t)}</code>`).join(' ')}</p></div></div>`);
+  for (const [key, label] of [['settings', '.claude/settings.json'], ['settingsLocal', '.claude/settings.local.json'], ['mcpJson', '.mcp.json']]) {
+    if (d.settings[key]) settingsEntries.push(`<div class="d-file"><div class="d-file-name">${label}</div><div class="md"><pre><code>${esc(d.settings[key])}</code></pre></div></div>`);
+  }
+  $('#d-body').innerHTML =
+    dSection(`Sessions — ${d.sessions.length}`, sessions, 'No sessions recorded.') +
+    dSection('CLAUDE.md', d.claudeMd.length ? dFiles(d.claudeMd, 'name') : null, 'No CLAUDE.md — sessions here start without project instructions.') +
+    dSection(`Memory — ${d.memory.length} file${d.memory.length === 1 ? '' : 's'}`, d.memory.length ? dFiles(d.memory, 'name') : null, 'No memory yet.') +
+    dSection(`Skills, agents & commands — ${caps.length}`, caps.length ? dFiles(caps, 'name') : null, 'None in .claude/skills, .claude/agents, or .claude/commands.') +
+    dSection('Settings', settingsEntries.length ? settingsEntries.join('') : null, 'No project-level settings or MCP servers.');
+}
+
+async function openDetail(path, name) {
+  const drawer = $('#drawer'), backdrop = $('#drawer-backdrop');
+  drawer.hidden = false;
+  backdrop.hidden = false;
+  $('#d-title').textContent = name;
+  $('#d-path').textContent = path;
+  $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Loading…</div>';
+  try {
+    const r = await fetch(`/api/project?path=${encodeURIComponent(path)}`);
+    if (!r.ok) throw new Error();
+    renderDetail(await r.json(), name);
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load project details.</div>';
+  }
+}
+
+function closeDetail() {
+  if (typeof stopFollow === 'function') stopFollow();
+  $('#drawer').hidden = true;
+  $('#drawer-backdrop').hidden = true;
+}
+
+function openDrawerShell(title, sub) {
+  if (typeof stopFollow === 'function') stopFollow();
+  $('#drawer').hidden = false;
+  $('#drawer-backdrop').hidden = false;
+  $('#d-title').textContent = title;
+  $('#d-path').textContent = sub || '';
+  $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Loading…</div>';
+}
+
+// ---------- transcript viewer, with live follow for running sessions ----------
+const follow = { id: null, offset: 0, lastDay: '', eventCount: 0, projectName: '', timer: null };
+
+function stopFollow() {
+  clearInterval(follow.timer);
+  follow.timer = null;
+  follow.id = null;
+}
+
+function transcriptHtml(events) {
+  const parts = [];
+  for (const ev of events) {
+    if (ev.ts) {
+      const day = new Date(ev.ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      if (day !== follow.lastDay) { parts.push(`<div class="t-ts">${esc(day)}</div>`); follow.lastDay = day; }
+    }
+    if (ev.kind === 'user') {
+      parts.push(`<div class="t-turn t-user"><span class="t-who">you${
+        ev.ts ? ' · ' + new Date(ev.ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''
+      }</span>${esc(ev.text)}${ev.truncated ? ' …' : ''}</div>`);
+    } else if (ev.kind === 'assistant') {
+      parts.push(`<div class="t-turn">${renderMd(ev.text + (ev.truncated ? ' …' : ''))}</div>`);
+    } else if (ev.kind === 'tool') {
+      parts.push(`<div class="t-tool">⚙ <span class="t-tname">${esc(ev.name)}</span> ${esc(ev.input || '')}</div>`);
+    } else if (ev.kind === 'note') {
+      parts.push(`<div class="t-note">${esc(ev.text)}</div>`);
+    }
+  }
+  return parts.join('');
+}
+
+function transcriptStatus() {
+  const liveNow = liveIds.has(follow.id);
+  $('#d-path').textContent = `${follow.projectName} · ${follow.eventCount} events${liveNow ? ' · ● live' : ''}`;
+}
+
+async function pollFollow() {
+  if (!follow.id) return;
+  try {
+    const r = await fetch(`/api/session?id=${encodeURIComponent(follow.id)}&after=${follow.offset}`);
+    if (!r.ok) return;
+    const t = await r.json();
+    if (follow.id !== t.sessionId) return; // drawer moved on meanwhile
+    follow.offset = t.nextOffset;
+    if (t.events.length) {
+      const body = $('#d-body');
+      const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 200;
+      follow.eventCount += t.events.length;
+      body.insertAdjacentHTML('beforeend', transcriptHtml(t.events));
+      if (nearBottom) body.scrollTop = body.scrollHeight;
+    }
+    transcriptStatus();
+    if (!liveIds.has(follow.id) && !t.events.length) stopFollow(); // session ended and drained
+  } catch { /* transient; next tick retries */ }
+}
+
+async function openTranscript(sessionId) {
+  openDrawerShell('Transcript', sessionId);
+  stopFollow();
+  try {
+    const r = await fetch(`/api/session?id=${encodeURIComponent(sessionId)}`);
+    if (!r.ok) throw new Error();
+    const t = await r.json();
+    follow.id = sessionId;
+    follow.offset = t.nextOffset;
+    follow.lastDay = '';
+    follow.eventCount = t.events.length;
+    follow.projectName = t.projectName;
+    $('#d-title').textContent = t.title;
+    const parts = [];
+    if (t.truncatedTurns) parts.push(`<div class="d-empty">… ${t.truncatedTurns} earlier events not shown</div>`);
+    parts.push(transcriptHtml(t.events));
+    $('#d-body').innerHTML = parts.join('') || '<div class="d-empty">Empty transcript.</div>';
+    transcriptStatus();
+    if (liveIds.has(sessionId)) {
+      $('#d-body').scrollTop = $('#d-body').scrollHeight; // start at the newest
+      follow.timer = setInterval(pollFollow, 2500);
+    } else {
+      follow.id = null;
+    }
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load the transcript.</div>';
+  }
+}
+
+// ---------- search ----------
+async function runSearch(q) {
+  openDrawerShell(`Search — "${q}"`, '');
+  try {
+    const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    $('#d-path').textContent = `${d.prompts.length + d.titles.length} results`;
+    const titleRows = d.titles.map((t) => `
+      <li>
+        <span class="s-title" data-session="${esc(t.sessionId)}" title="Click to read the transcript">${esc(t.title)}</span>
+        <span class="s-when">${esc(t.projectName)}</span>
+        <span class="s-when">${relTime(t.lastActivityAt)}</span>
+      </li>`).join('');
+    const promptRows = d.prompts.map((p) => `
+      <li>
+        <span class="s-title" ${p.sessionId ? `data-session="${esc(p.sessionId)}" title="Click to read the transcript"` : ''}>${esc(p.snippet)}</span>
+        <span class="s-when">${esc(p.projectName)}</span>
+        <span class="s-when">${relTime(p.timestamp)}</span>
+      </li>`).join('');
+    $('#d-body').innerHTML =
+      dSection(`Session titles — ${d.titles.length}`, titleRows ? `<ul class="d-sessions">${titleRows}</ul>` : null, 'No title matches.') +
+      dSection(`Prompts — ${d.prompts.length}`, promptRows ? `<ul class="d-sessions">${promptRows}</ul>` : null, 'No prompt matches.');
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Search failed.</div>';
+  }
+}
+
+// ---------- settings ----------
+async function saveSetting(endpoint, payload, note) {
+  try {
+    const r = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const out = await r.json();
+    toast(out.ok ? note : `Couldn't save: ${out.error}`);
+    return out.ok;
+  } catch {
+    toast("Couldn't reach the server");
+    return false;
+  }
+}
+
+async function openSettings() {
+  openDrawerShell('Settings', 'changes save instantly');
+  try {
+    const r = await fetch('/api/config');
+    if (!r.ok) throw new Error();
+    const c = await r.json();
+    const nameFor = (p) => {
+      for (const [k, v] of Object.entries(c.names || {})) {
+        if (k.toLowerCase() === p.toLowerCase()) return v;
+      }
+      return '';
+    };
+    const general = `
+      <div class="set-row">
+        <span class="set-label">Notifications<span class="set-sub">waiting-for-input and stuck-session alerts</span></span>
+        <input type="checkbox" id="set-notify" ${c.notifications !== false ? 'checked' : ''}>
+      </div>
+      <div class="set-row">
+        <span class="set-label">Open sessions in<span class="set-sub">terminal used by open ⬈ and ⊕</span></span>
+        <select id="set-terminal">${(c.terminals || [])
+          .map((t) => `<option value="${esc(t.id)}" ${t.id === c.terminal ? 'selected' : ''}>${esc(t.label)}</option>`)
+          .join('')}</select>
+      </div>`;
+    const projects = (lastState?.projects || [])
+      .map((p) => `
+      <div class="set-row">
+        <span class="set-label">${esc(p.name)}<span class="set-sub">${esc(p.path)}</span></span>
+        <input type="text" placeholder="rename…" value="${esc(nameFor(p.path))}" data-rename="${esc(p.path)}">
+        <button class="copy" data-hide="${esc(p.path)}" title="Hide this project (and everything under it) from the dashboard">hide</button>
+      </div>`)
+      .join('');
+    const hidden = (c.ignores || [])
+      .map((p) => `
+      <div class="set-row">
+        <span class="set-label mono" style="font-size:11.5px">${esc(p)}</span>
+        <button class="copy" data-unhide="${esc(p)}">unhide</button>
+      </div>`)
+      .join('');
+    $('#d-body').innerHTML =
+      dSection('General', general) +
+      dSection(`Projects — ${lastState?.projects?.length || 0}`, projects, 'No projects yet.') +
+      dSection(`Hidden — ${(c.ignores || []).length}`, hidden, 'Nothing hidden. The hide buttons above put a project (and its whole subtree) here.');
+    $('#set-notify').addEventListener('change', (e) =>
+      saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
+    $('#set-terminal').addEventListener('change', (e) =>
+      saveSetting('/api/config', { terminal: e.target.value }, `Sessions will open in ${e.target.selectedOptions[0].text}`));
+    $('#d-body').addEventListener('change', (e) => {
+      const input = e.target.closest('[data-rename]');
+      if (input) saveSetting('/api/names', { path: input.dataset.rename, name: input.value }, input.value.trim() ? `Renamed to "${input.value.trim()}"` : 'Name reset to default');
+    });
+    $('#d-body').addEventListener('click', async (e) => {
+      const hide = e.target.closest('[data-hide]');
+      if (hide && (await saveSetting('/api/ignore', { path: hide.dataset.hide }, 'Hidden'))) { openSettings(); return; }
+      const unhide = e.target.closest('[data-unhide]');
+      if (unhide && (await saveSetting('/api/ignore', { path: unhide.dataset.unhide, remove: true }, 'Unhidden — back after the next scan'))) openSettings();
+    });
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load settings.</div>';
+  }
+}
+
+$('#gear').addEventListener('click', openSettings);
+
+// '/' focuses search from anywhere
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) {
+    e.preventDefault();
+    $('#search').focus();
+  }
+});
+
+$('#search').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.value.trim().length >= 2) runSearch(e.target.value.trim());
+});
+
+document.addEventListener('click', async (e) => {
+  const t = e.target.closest('[data-session]');
+  if (t) { openTranscript(t.dataset.session); return; }
+  const nb = e.target.closest('[data-new]');
+  if (nb) {
+    nb.disabled = true;
+    try {
+      const r = await fetch('/api/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newSession: true, projectPath: nb.dataset.new, target: 'terminal' }),
+      });
+      const out = await r.json();
+      toast(out.ok ? 'Opening a new session in Ghostty…' : `Couldn't open: ${out.error}`);
+    } catch {
+      toast("Couldn't reach the server");
+    }
+    nb.disabled = false;
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-detail]');
+  if (el) openDetail(el.dataset.detail, el.textContent);
+});
+$('#d-close').addEventListener('click', closeDetail);
+$('#drawer-backdrop').addEventListener('click', closeDetail);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail(); });
+
+poll();
+connect();
+setInterval(poll, 60_000);
+// keep relative times fresh even without state changes
+setInterval(() => { if (lastState) render(lastState); }, 30_000);
+</script>
+</body>
+</html>
