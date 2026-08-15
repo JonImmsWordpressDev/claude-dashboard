@@ -266,11 +266,11 @@
   }
   #search:focus { outline: 2px solid var(--accent); outline-offset: 0; }
   #search::placeholder { color: var(--faint); }
-  #gear {
+  #gear, #mc-btn {
     border: none; background: none; color: var(--muted); cursor: pointer;
     font-size: 15px; padding: 2px 6px; border-radius: 2px; margin-left: 4px;
   }
-  #gear:hover { background: var(--surface2); color: var(--ink); }
+  #gear:hover, #mc-btn:hover { background: var(--surface2); color: var(--ink); }
 
   /* settings drawer */
   .set-row {
@@ -396,6 +396,59 @@
   #dormant .cards { margin-top: 12px; display: grid; gap: 14px;
     grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
   #dormant .card { opacity: 0.75; }
+
+  /* ---------- mission control ---------- */
+  #mc {
+    position: fixed; inset: 0; z-index: 15;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+  }
+  #mc[hidden] { display: none !important; }
+  .mc-head {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 20px; border-bottom: 2px solid var(--line);
+    background: var(--surface); flex: none;
+  }
+  .mc-title {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-size: 16px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+  }
+  .mc-sub { color: var(--faint); font-size: 12px; }
+  #mc-grid {
+    flex: 1; overflow-y: auto;
+    display: grid; gap: 10px; padding: 14px 20px;
+    grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+    align-content: start;
+  }
+  #mc-grid .mc-empty { color: var(--faint); font-size: 13px; padding: 24px 0; }
+  .mc-pane {
+    display: flex; flex-direction: column;
+    background: var(--surface); border-radius: 2px;
+    height: min(46vh, 480px); min-width: 0;
+  }
+  .mc-pane.waiting { box-shadow: inset 0 2px 0 var(--warn); }
+  .mc-pane-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid var(--line); flex: none;
+    min-width: 0;
+  }
+  .mc-pane-head .mc-proj {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 500; font-size: 15px; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mc-pane-head .mc-proj:hover { color: var(--warn); }
+  .mc-pane-head .mc-meta { color: var(--faint); font-size: 11px; white-space: nowrap; }
+  .mc-pane-head .spacer { flex: 1; min-width: 6px; }
+  .mc-pane-task {
+    padding: 4px 12px; border-bottom: 1px solid var(--line); flex: none;
+    font-size: 11.5px; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mc-pane-task .prompt-ch { color: var(--accent); margin-right: 6px; }
+  .mc-pane-body { flex: 1; overflow-y: auto; padding: 6px 12px 10px; font-size: 12px; }
+  .mc-pane-body .t-turn { margin-top: 8px; }
 
   /* ---------- project detail drawer ---------- */
   #drawer-backdrop {
@@ -550,6 +603,7 @@
   </label>
   <div id="quota"></div>
   <span id="clock" class="flap" title="board time"></span>
+  <button id="mc-btn" title="Mission Control — every live session at once">▦</button>
   <button id="gear" title="Settings">⚙</button>
 </header>
 
@@ -576,6 +630,15 @@
 <div id="palette" hidden>
   <input id="palette-input" type="text" placeholder="Jump to a project, session, or action…" autocomplete="off">
   <ul id="palette-list"></ul>
+</div>
+<div id="mc" hidden>
+  <div class="mc-head">
+    <span class="mc-title">Mission Control</span>
+    <span class="mc-sub" id="mc-sub"></span>
+    <span class="spacer"></span>
+    <button class="d-close" id="mc-close" title="Close (Esc)">✕</button>
+  </div>
+  <div id="mc-grid"></div>
 </div>
 <div id="drawer-backdrop" hidden></div>
 <aside id="drawer" hidden>
@@ -689,10 +752,12 @@ function meter(label, pct, title) {
 }
 
 // Status cell: a split-flap that flips when the status actually changes.
-const prevStatusUI = new Map(); // sessionId -> status
-function statusFlap(s) {
-  const changed = prevStatusUI.has(s.sessionId) && prevStatusUI.get(s.sessionId) !== s.status;
-  prevStatusUI.set(s.sessionId, s.status);
+// keyPrefix keeps rail and mission-control flips independent.
+const prevStatusUI = new Map(); // key -> status
+function statusFlap(s, keyPrefix = '') {
+  const key = keyPrefix + s.sessionId;
+  const changed = prevStatusUI.has(key) && prevStatusUI.get(key) !== s.status;
+  prevStatusUI.set(key, s.status);
   const flip = changed ? ' flip' : '';
   if (s.status === 'waiting') {
     return `<span class="flap disp st st-waiting${flip}" title="${esc(s.waitingFor || 'Claude is waiting for your input')}">needs you</span>`;
@@ -930,6 +995,7 @@ function render(state) {
       : `<div class="live-none">No sessions running. Start one with <code class="mono">claude</code> in any project.</div>`));
 
   renderGitAttention(state);
+  if (typeof mcSync === 'function') mcSync();
   renderDigest(state);
 
   // grid + dormant
@@ -1187,12 +1253,12 @@ function stopFollow() {
   follow.id = null;
 }
 
-function transcriptHtml(events) {
+function transcriptHtml(events, st = follow) {
   const parts = [];
   for (const ev of events) {
     if (ev.ts) {
       const day = new Date(ev.ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      if (day !== follow.lastDay) { parts.push(`<div class="t-ts">${esc(day)}</div>`); follow.lastDay = day; }
+      if (day !== st.lastDay) { parts.push(`<div class="t-ts">${esc(day)}</div>`); st.lastDay = day; }
     }
     if (ev.kind === 'user') {
       parts.push(`<div class="t-turn t-user"><span class="t-who">you${
@@ -1275,6 +1341,118 @@ async function openTranscript(sessionId, highlight) {
     $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load the transcript.</div>';
   }
 }
+
+// ---------- mission control: every live session streaming side by side ----------
+const mc = { open: false, panes: new Map(), timer: null, polling: false };
+
+function openMissionControl() {
+  if (mc.open) return;
+  mc.open = true;
+  $('#mc').hidden = false;
+  mcSync();
+  mcPoll();
+  mc.timer = setInterval(mcPoll, 2500);
+}
+
+function closeMissionControl() {
+  if (!mc.open) return;
+  mc.open = false;
+  $('#mc').hidden = true;
+  clearInterval(mc.timer);
+  mc.timer = null;
+  mc.panes.clear();
+  $('#mc-grid').innerHTML = '';
+}
+
+function mcPaneHead(s) {
+  const subs = s.subagents
+    ? `<span class="mc-meta" title="subagent transcripts · their tokens">⑂ ${s.subagents.count}${
+        s.subagents.mtok ? ` · ${s.subagents.mtok}M tok` : ''}</span>`
+    : '';
+  return `<span class="mc-proj" data-session="${esc(s.sessionId)}" title="Open the full transcript">${esc(s.projectName)}</span>
+    ${modelChip(s.model)}${subs}<span class="spacer"></span>
+    <span class="mc-meta">${elapsed(s.startedAt)}</span>${statusFlap(s, 'mc:')}`;
+}
+
+// Reconcile panes with the latest state: add new sessions, drop ended ones,
+// refresh headers, and reorder only when the order actually changed (a DOM
+// move resets the pane's scroll position).
+function mcSync() {
+  if (!mc.open || !lastState) return;
+  const live = lastState.liveSessions || [];
+  $('#mc-sub').textContent = live.length ? `${live.length} session${live.length === 1 ? '' : 's'} live` : '';
+  const grid = $('#mc-grid');
+  if (!live.length) {
+    mc.panes.clear();
+    grid.innerHTML = '<div class="mc-empty">No sessions running. Start one with <code class="mono">claude</code> in any project.</div>';
+    return;
+  }
+  const empty = grid.querySelector('.mc-empty');
+  if (empty) empty.remove();
+  const seen = new Set();
+  for (const s of live) {
+    seen.add(s.sessionId);
+    let pane = mc.panes.get(s.sessionId);
+    if (!pane) {
+      const el = document.createElement('div');
+      el.className = 'mc-pane';
+      el.dataset.sid = s.sessionId;
+      el.innerHTML = '<div class="mc-pane-head"></div><div class="mc-pane-task" hidden></div><div class="mc-pane-body"><div class="d-empty">Loading…</div></div>';
+      pane = { el, offset: 0, st: { lastDay: '' }, loaded: false };
+      mc.panes.set(s.sessionId, pane);
+      grid.appendChild(el);
+    }
+    pane.el.classList.toggle('waiting', s.status === 'waiting');
+    const head = pane.el.querySelector('.mc-pane-head');
+    patch(head, mcPaneHead(s));
+    const taskEl = pane.el.querySelector('.mc-pane-task');
+    const taskHtml = s.currentTask ? `<span class="prompt-ch">❯</span>${esc(s.currentTask.activeForm)}` : '';
+    patch(taskEl, taskHtml);
+    taskEl.hidden = !taskHtml;
+  }
+  for (const [id, pane] of mc.panes) {
+    if (!seen.has(id)) { pane.el.remove(); mc.panes.delete(id); }
+  }
+  const desired = live.map((s) => s.sessionId);
+  const current = [...grid.children].map((c) => c.dataset.sid);
+  if (desired.join() !== current.join()) {
+    const scrolls = new Map(desired.map((id) => [id, mc.panes.get(id).el.querySelector('.mc-pane-body').scrollTop]));
+    for (const id of desired) grid.appendChild(mc.panes.get(id).el);
+    for (const id of desired) mc.panes.get(id).el.querySelector('.mc-pane-body').scrollTop = scrolls.get(id);
+  }
+}
+
+async function mcPoll() {
+  if (!mc.open || mc.polling) return;
+  mc.polling = true;
+  try {
+    await Promise.all([...mc.panes.entries()].map(async ([id, pane]) => {
+      try {
+        const url = `/api/session?id=${encodeURIComponent(id)}${pane.loaded ? `&after=${pane.offset}` : ''}`;
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const t = await r.json();
+        pane.offset = t.nextOffset;
+        const body = pane.el.querySelector('.mc-pane-body');
+        if (!pane.loaded) {
+          pane.loaded = true;
+          body.innerHTML = transcriptHtml(t.events.slice(-40), pane.st) || '<div class="d-empty">Nothing yet.</div>';
+          body.scrollTop = body.scrollHeight;
+        } else if (t.events.length) {
+          const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 160;
+          body.insertAdjacentHTML('beforeend', transcriptHtml(t.events, pane.st));
+          while (body.children.length > 300) body.firstChild.remove();
+          if (nearBottom) body.scrollTop = body.scrollHeight;
+        }
+      } catch { /* transient; next tick retries */ }
+    }));
+  } finally {
+    mc.polling = false;
+  }
+}
+
+$('#mc-btn').addEventListener('click', openMissionControl);
+$('#mc-close').addEventListener('click', closeMissionControl);
 
 // ---------- search ----------
 async function runSearch(q) {
@@ -1471,7 +1649,12 @@ document.addEventListener('click', (e) => {
 $('#d-close').addEventListener('click', closeDetail);
 $('#drawer-backdrop').addEventListener('click', closeDetail);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeDetail(); if (typeof closePalette === 'function') closePalette(); }
+  if (e.key === 'Escape') {
+    const drawerOpen = !$('#drawer').hidden;
+    closeDetail();
+    if (typeof closePalette === 'function') closePalette();
+    if (!drawerOpen && typeof closeMissionControl === 'function') closeMissionControl();
+  }
 });
 
 // ---------- stats view ----------
@@ -1578,6 +1761,7 @@ function paletteItems(q) {
   const items = [];
   const st = lastState || { projects: [], liveSessions: [] };
   items.push({ k: '⚙', label: 'Settings', hint: 'rename, hide, terminal, notifications', run: openSettings });
+  items.push({ k: '▦', label: 'Mission Control', hint: 'every live session at once', run: openMissionControl });
   items.push({ k: '▲', label: 'Stats', hint: 'heatmap · models · hours', run: openStats });
   for (const l of st.liveSessions || []) {
     items.push({ k: '●', label: `Watch live: ${l.projectName} — ${l.title || ''}`, hint: l.status, run: () => openTranscript(l.sessionId) });

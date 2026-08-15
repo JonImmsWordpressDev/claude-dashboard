@@ -329,3 +329,19 @@ test('isProjectMuted handles empty or missing list', () => {
   assert.equal(isProjectMuted('/Users/alex/p', []), false);
   assert.equal(isProjectMuted('/Users/alex/p', undefined), false);
 });
+
+// --- Mission Control: subagent summary ---
+const { subagentSummary } = require('../lib/transcripts');
+
+test('subagentSummary carries count and tokens rounded to 0.1M', () => {
+  const meta = {
+    subagentCount: 3,
+    subagentUsage: { 'claude-opus-5': { input: 1500000, output: 40000, cacheRead: 0, cacheCreation: 0 } },
+  };
+  assert.deepEqual(subagentSummary(meta), { count: 3, mtok: 1.5 });
+});
+
+test('subagentSummary is null without subagents', () => {
+  assert.equal(subagentSummary({}), null);
+  assert.equal(subagentSummary({ subagentCount: 0 }), null);
+});
