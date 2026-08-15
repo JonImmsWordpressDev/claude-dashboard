@@ -187,3 +187,145 @@ test('matchesPrefix works across separator styles', () => {
   assert.equal(matchesPrefix('C:\\Users\\alex\\Old Sites\\legacy', prefixes), true);
   assert.equal(matchesPrefix('C:\\Users\\alex\\other', prefixes), false);
 });
+
+// --- Daily usage bucketing (cost history) ---
+const { scanLine, mergeDays, dailyCostSeries } = require('../lib/transcripts');
+
+function assistantLine({ id, model, ts, input = 0, output = 0 }) {
+  return JSON.stringify({
+    type: 'assistant',
+    timestamp: ts,
+    message: { id, model, usage: { input_tokens: input, output_tokens: output } },
+  });
+}
+
+function freshScan() {
+  return { offset: 0, aiTitle: null, usage: {}, days: {}, lastMsgId: null, lastModel: null };
+}
+
+// Local-time timestamps so the tests pass in any timezone.
+const AUG10 = new Date(2026, 7, 10, 14, 30).toISOString();
+const AUG11 = new Date(2026, 7, 11, 9, 0).toISOString();
+
+test('scanLine buckets usage into local days per model', () => {
+  const scan = freshScan();
+  scanLine(assistantLine({ id: 'm1', model: 'claude-opus-5', ts: AUG10, input: 100, output: 10 }), scan);
+  scanLine(assistantLine({ id: 'm2', model: 'claude-opus-5', ts: AUG11, input: 200, output: 20 }), scan);
+  assert.equal(scan.days['2026-08-10']['claude-opus-5'].input, 100);
+  assert.equal(scan.days['2026-08-11']['claude-opus-5'].output, 20);
+  // totals still accumulate as before
+  assert.equal(scan.usage['claude-opus-5'].input, 300);
+});
+
+test('scanLine day buckets dedupe by message id', () => {
+  const scan = freshScan();
+  const line = assistantLine({ id: 'm1', model: 'claude-opus-5', ts: AUG10, input: 100 });
+  scanLine(line, scan);
+  scanLine(line, scan);
+  assert.equal(scan.days['2026-08-10']['claude-opus-5'].input, 100);
+});
+
+test('scanLine without timestamp still counts totals, skips day bucket', () => {
+  const scan = freshScan();
+  scanLine(JSON.stringify({ type: 'assistant', message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 50 } } }), scan);
+  assert.equal(scan.usage['claude-opus-5'].input, 50);
+  assert.deepEqual(scan.days, {});
+});
+
+test('mergeDays merges nested day/model buckets', () => {
+  const a = { '2026-08-10': { 'claude-opus-5': { input: 100, output: 0, cacheRead: 0, cacheCreation: 0 } } };
+  const b = {
+    '2026-08-10': { 'claude-opus-5': { input: 50, output: 5, cacheRead: 0, cacheCreation: 0 } },
+    '2026-08-11': { 'claude-sonnet-5': { input: 10, output: 1, cacheRead: 0, cacheCreation: 0 } },
+  };
+  const m = mergeDays(mergeDays({}, a), b);
+  assert.equal(m['2026-08-10']['claude-opus-5'].input, 150);
+  assert.equal(m['2026-08-10']['claude-opus-5'].output, 5);
+  assert.equal(m['2026-08-11']['claude-sonnet-5'].input, 10);
+});
+
+test('dailyCostSeries zero-fills and ends today', () => {
+  const today = new Date(2026, 7, 11, 16, 0).getTime();
+  const days = {
+    '2026-08-10': { 'claude-opus-5': { input: 1_000_000, output: 0, cacheRead: 0, cacheCreation: 0 } },
+  };
+  const series = dailyCostSeries([days], 3, today);
+  assert.equal(series.length, 3);
+  assert.equal(series[0].cost, 0); // Aug 9
+  assert.equal(series[1].cost, 5); // Aug 10: 1M opus-5 input tokens at $5/MTok
+  assert.equal(series[1].tokens, 1_000_000);
+  assert.equal(series[2].t, new Date(2026, 7, 11).getTime()); // today, local midnight
+  assert.equal(series[2].cost, 0);
+});
+
+// --- Week × hour heatmap ---
+const { weekHourHeat } = require('../lib/history');
+
+test('weekHourHeat counts prompts into [dayOfWeek][hour] cells', () => {
+  // Sunday 2026-08-09 14:xx local, twice; Monday 2026-08-10 09:xx once.
+  const ts = [
+    new Date(2026, 7, 9, 14, 5).getTime(),
+    new Date(2026, 7, 9, 14, 55).getTime(),
+    new Date(2026, 7, 10, 9, 0).getTime(),
+  ];
+  const heat = weekHourHeat(ts);
+  assert.equal(heat.length, 7);
+  assert.equal(heat[0].length, 24);
+  assert.equal(heat[0][14], 2); // Sunday 2pm
+  assert.equal(heat[1][9], 1);  // Monday 9am
+  assert.equal(heat[3][12], 0);
+});
+
+test('weekHourHeat handles empty input', () => {
+  const heat = weekHourHeat([]);
+  assert.equal(heat.length, 7);
+  assert.equal(heat.flat().reduce((a, b) => a + b, 0), 0);
+});
+
+// --- Search query filters ---
+const { parseSearchQuery } = require('../lib/search');
+
+test('parseSearchQuery passes plain text through', () => {
+  const p = parseSearchQuery('deploy hooks');
+  assert.equal(p.text, 'deploy hooks');
+  assert.equal(p.project, null);
+  assert.equal(p.since, null);
+});
+
+test('parseSearchQuery extracts project: filter', () => {
+  const p = parseSearchQuery('project:dashboard deploy');
+  assert.equal(p.text, 'deploy');
+  assert.equal(p.project, 'dashboard');
+});
+
+test('parseSearchQuery extracts since: with relative days', () => {
+  const now = new Date(2026, 7, 15, 12, 0).getTime();
+  const p = parseSearchQuery('since:7d deploy', now);
+  assert.equal(p.text, 'deploy');
+  assert.equal(p.since, now - 7 * 86400000);
+});
+
+test('parseSearchQuery extracts since: with a date', () => {
+  const p = parseSearchQuery('since:2026-08-01 deploy');
+  assert.equal(p.since, new Date(2026, 7, 1).getTime());
+});
+
+test('parseSearchQuery ignores malformed since: values', () => {
+  const p = parseSearchQuery('since:soon deploy');
+  assert.equal(p.since, null);
+  assert.equal(p.text, 'deploy');
+});
+
+// --- Per-project notification mute ---
+const { isProjectMuted } = require('../lib/notify');
+
+test('isProjectMuted matches case-insensitively and tolerates separators', () => {
+  const muted = ['/Users/alex/Projects/claude-dashboard'];
+  assert.equal(isProjectMuted('/users/alex/projects/Claude-Dashboard', muted), true);
+  assert.equal(isProjectMuted('/Users/alex/Projects/other', muted), false);
+});
+
+test('isProjectMuted handles empty or missing list', () => {
+  assert.equal(isProjectMuted('/Users/alex/p', []), false);
+  assert.equal(isProjectMuted('/Users/alex/p', undefined), false);
+});

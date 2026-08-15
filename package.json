@@ -1,6 +1,6 @@
 {
   "name": "claude-dashboard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Local dashboard for Claude Code: live sessions, transcripts, costs, git status — all your projects in one place.",
   "main": "server.js",
   "scripts": {

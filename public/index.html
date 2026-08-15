@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Dashboard</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#131211" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#f1efe9" media="(prefers-color-scheme: light)">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%23131211'/%3E%3Ctext x='8' y='12' font-size='11' text-anchor='middle' fill='%2379c478' font-family='monospace'%3E%E2%9D%AF%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#0d1215" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%230d1215'/%3E%3Crect y='7.6' width='16' height='0.8' fill='%23000'/%3E%3Ctext x='8' y='12' font-size='11' text-anchor='middle' fill='%23ffb020' font-family='monospace'%3E%E2%9D%AF%3C/text%3E%3C/svg%3E">
 <style>
   @font-face {
     font-family: 'JetBrains Mono';
@@ -24,41 +24,55 @@
     src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff2');
     font-weight: 700; font-style: normal; font-display: swap;
   }
-  /* Terminal-native: warm paper "printout" in light, warm graphite in dark.
-     Green = working, amber = needs you, red = broken. One mono face carries
-     the whole identity. */
+  @font-face {
+    font-family: 'Oswald';
+    src: url('/fonts/Oswald-Variable.woff2') format('woff2');
+    font-weight: 200 700; font-style: normal; font-display: swap;
+  }
+  /* Departures board: blue-black enamel, ivory flap letters, amber is the
+     loudest color (needs you), green is a small "boarding" lamp, red means
+     broken. Oswald condensed caps carry names; JetBrains Mono carries data.
+     Light theme is the same timetable, printed on paper. */
   :root {
-    --bg: #f1efe9;
-    --surface: #faf9f5;
-    --surface2: #e7e4db;
-    --ink: #26241e;
-    --muted: #5d594d;
-    --faint: #8a8577;
-    --line: #d8d4c8;
-    --accent: #237a3c;
-    --warn: #96660a;
-    --bad: #b3372c;
-    --chip-bg: #e7e4db;
-    --warn-bg: rgba(150, 102, 10, 0.10);
-    --accent-bg: rgba(35, 122, 60, 0.08);
+    --bg: #f5f4f0;
+    --surface: #ecebe5;
+    --surface2: #e0dfd8;
+    --ink: #1b2022;
+    --muted: #596264;
+    --faint: #8d9496;
+    --line: #d5d4cc;
+    --accent: #1d7a44;
+    --warn: #a66a00;
+    --bad: #bd3524;
+    --chip-bg: #e0dfd8;
+    --warn-bg: rgba(166, 106, 0, 0.10);
+    --accent-bg: rgba(29, 122, 68, 0.08);
     --glow: none;
+    --flap: #ecebe5;
+    --flap-hi: #f2f1ec;
+    --flap-split: rgba(0, 0, 0, 0.10);
+    --amber-ink: #f5f4f0;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #131211;
-      --surface: #1a1917;
-      --surface2: #242219;
-      --ink: #d6d2c6;
-      --muted: #918c7e;
-      --faint: #6b665a;
-      --line: #2b2924;
-      --accent: #79c478;
-      --warn: #dfa63c;
-      --bad: #e0564a;
-      --chip-bg: #242219;
-      --warn-bg: rgba(223, 166, 60, 0.12);
-      --accent-bg: rgba(121, 196, 120, 0.09);
-      --glow: 0 0 6px;
+      --bg: #0d1215;
+      --surface: #151d22;
+      --surface2: #1f292f;
+      --ink: #e9e4d6;
+      --muted: #93a09e;
+      --faint: #5d6b6b;
+      --line: #202b31;
+      --accent: #46c073;
+      --warn: #ffb020;
+      --bad: #ff5f45;
+      --chip-bg: #1f292f;
+      --warn-bg: rgba(255, 176, 32, 0.12);
+      --accent-bg: rgba(70, 192, 115, 0.10);
+      --glow: 0 0 7px;
+      --flap: #151d22;
+      --flap-hi: #1c262c;
+      --flap-split: rgba(0, 0, 0, 0.45);
+      --amber-ink: #0d1215;
     }
   }
   * { box-sizing: border-box; margin: 0; }
@@ -70,16 +84,46 @@
     padding-bottom: 48px;
   }
   .mono { font-family: inherit; }
-  ::selection { background: var(--accent); color: var(--bg); }
+  ::selection { background: var(--warn); color: var(--amber-ink); }
 
-  /* ---------- header ---------- */
+  /* Display face: condensed caps, the board's letter-painted voice. */
+  .disp {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
+  }
+  /* Split-flap cell: gradient face with the horizontal split line. */
+  .flap {
+    position: relative; display: inline-flex; align-items: center;
+    padding: 2px 9px; border-radius: 2px;
+    background: linear-gradient(var(--flap-hi) 0%, var(--flap) 46%, var(--flap) 54%, var(--flap-hi) 100%);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+    white-space: nowrap;
+  }
+  .flap::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 50%;
+    height: 1px; background: var(--flap-split); pointer-events: none;
+  }
+  @keyframes flapflip { 0% { transform: rotateX(85deg); } 100% { transform: rotateX(0); } }
+  .flap.flip { animation: flapflip 0.3s ease-out; transform-origin: 50% 50%; }
+  @media (prefers-reduced-motion: reduce) { .flap.flip { animation: none; } }
+
+  /* ---------- header: the station sign ---------- */
   header {
     display: flex; align-items: center; gap: 16px;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--line);
+    padding: 12px 20px;
+    border-bottom: 2px solid var(--line);
+    background: var(--surface);
   }
-  header h1 { font-size: 13.5px; font-weight: 700; letter-spacing: 0; }
-  header h1 .tilde { color: var(--accent); }
+  header h1 {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-size: 19px; font-weight: 600; letter-spacing: 0.10em;
+    text-transform: uppercase; white-space: nowrap;
+  }
+  header h1 .tilde { color: var(--warn); }
+  #clock {
+    font-size: 14px; font-weight: 700; color: var(--ink);
+    letter-spacing: 0.08em; font-variant-numeric: tabular-nums;
+  }
   #conn {
     width: 7px; height: 7px; border-radius: 50%;
     background: var(--faint); flex: none;
@@ -99,54 +143,61 @@
   .meter .fill.hot { background: var(--warn); }
   .meter .fill.crit { background: var(--bad); }
 
-  /* ---------- live rail ---------- */
+  /* ---------- live rail: the departures rows ---------- */
   #live {
     position: sticky; top: 0; z-index: 5;
     background: var(--bg);
-    padding: 14px 20px 12px;
-    border-bottom: 1px solid var(--line);
+    padding: 14px 20px 14px;
+    border-bottom: 2px solid var(--line);
   }
   #live .rail-label {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--faint); margin-bottom: 9px;
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.22em;
+    color: var(--faint); margin-bottom: 10px;
   }
-  #live .cards { display: flex; gap: 12px; overflow-x: auto; }
-  .live-card {
-    flex: 0 0 auto; min-width: 300px; max-width: 420px;
+  #live .rows { display: flex; flex-direction: column; gap: 5px; }
+  .dep-row {
+    display: grid;
+    grid-template-columns: 52px minmax(150px, 230px) 1fr max-content;
+    gap: 2px 16px; align-items: center;
     background: var(--surface);
-    border: 1px solid var(--line);
-    border-left: 3px solid var(--accent);
-    border-radius: 3px;
-    padding: 11px 14px;
+    border-radius: 2px;
+    padding: 8px 14px;
   }
-  .live-card.waiting { border-left-color: var(--warn); }
-  .live-card .top { display: flex; align-items: baseline; gap: 9px; }
-  .live-card .proj { font-weight: 700; font-size: 13px; }
-  .live-card .elapsed { color: var(--faint); font-size: 12px; margin-left: auto; }
-  .chip {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 11px; padding: 2px 8px; border-radius: 3px;
-    background: var(--accent-bg); color: var(--accent);
-    white-space: nowrap;
+  .dep-row.waiting { background: var(--warn-bg); box-shadow: inset 2px 0 0 var(--warn); }
+  .dep-time { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .dep-proj {
+    font-size: 19px; line-height: 1.15; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
   }
-  .chip.waiting { background: var(--warn-bg); color: var(--warn); }
-  .chip .led {
-    width: 6px; height: 6px; border-radius: 50%; background: currentColor;
-    box-shadow: var(--glow) currentColor;
-  }
-  .chip.busy .led { animation: pulse 1.6s ease-in-out infinite; }
-  .chip.waiting .led { animation: pulse 0.9s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.25; } }
-  @media (prefers-reduced-motion: reduce) { .led { animation: none !important; } }
-  .live-card .title { font-size: 13px; color: var(--muted); margin-top: 6px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .live-card .task {
-    margin-top: 7px; font-size: 12px; color: var(--ink);
+  .dep-proj .badge { vertical-align: 3px; }
+  .dep-mid { min-width: 0; }
+  .dep-title {
+    font-size: 12.5px; color: var(--muted); cursor: pointer;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .live-card .task .prompt-ch { color: var(--accent); margin-right: 6px; }
-  .live-card .task .count { color: var(--faint); margin-left: 6px; }
-  .live-card .foot { display: flex; align-items: center; margin-top: 9px; gap: 8px; }
+  .dep-title:hover { color: var(--ink); }
+  .dep-task {
+    margin-top: 2px; font-size: 11.5px; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dep-task .prompt-ch { color: var(--accent); margin-right: 6px; }
+  .dep-task .count { color: var(--faint); margin-left: 6px; }
+  .dep-right { display: flex; align-items: center; gap: 10px; justify-self: end; }
+  .dep-elapsed { color: var(--faint); font-size: 12px; }
+  .st { font-size: 11.5px; letter-spacing: 0.14em; padding: 3px 10px 2px; }
+  .st.st-busy { color: var(--accent); }
+  .st.st-waiting {
+    background: var(--warn); color: var(--amber-ink); font-weight: 600;
+    box-shadow: var(--glow) var(--warn);
+  }
+  .st.st-waiting::after { background: rgba(0, 0, 0, 0.22); }
+  .st.st-quiet { color: var(--warn); }
+  @media (max-width: 700px) {
+    .dep-row { grid-template-columns: 44px 1fr max-content; }
+    .dep-mid { grid-column: 1 / -1; }
+  }
   .live-none { color: var(--faint); font-size: 13px; }
   .live-none code { color: var(--muted); }
 
@@ -158,13 +209,17 @@
   }
   .card {
     background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    padding: 14px 16px 10px;
+    border-radius: 2px;
+    border-top: 2px solid var(--line);
+    padding: 12px 16px 10px;
     display: flex; flex-direction: column;
   }
   .card .head { display: flex; align-items: center; gap: 8px; }
-  .card .name { font-weight: 700; font-size: 13.5px; }
+  .card .name {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 500; font-size: 15px;
+  }
   .card .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; box-shadow: var(--glow) var(--accent); }
   .card .spark { margin-left: auto; }
   .card .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 7px; font-size: 11px; }
@@ -198,7 +253,7 @@
   .copy:hover { background: var(--surface2); color: var(--ink); }
   .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .open-btn { color: var(--accent); }
-  #open-pref-wrap { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  #open-pref-wrap { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   #open-pref {
     font: inherit; color: var(--ink);
     background: var(--surface2); border: 1px solid var(--line);
@@ -286,7 +341,8 @@
   }
   #digest summary::-webkit-details-marker { display: none; }
   #digest-label {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.22em;
     color: var(--faint);
   }
   #digest-label::before { content: '▸ '; }
@@ -302,14 +358,21 @@
   #digest-range button:last-child { border-radius: 0 2px 2px 0; }
   #digest-range button.sel { background: var(--surface2); color: var(--ink); }
   #digest-body { margin-top: 10px; }
-  .digest-day { color: var(--faint); font-size: 11px; text-transform: uppercase;
-    letter-spacing: 0.06em; margin: 14px 0 6px; }
-  .digest-item {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
-    padding: 10px 14px; margin-bottom: 8px;
+  .digest-day {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    color: var(--faint); font-size: 11.5px; text-transform: uppercase;
+    letter-spacing: 0.22em; margin: 16px 0 6px;
   }
-  .digest-item .di-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .digest-item .di-proj { font-weight: 700; font-size: 12.5px; }
+  .digest-item {
+    background: var(--surface); border-radius: 2px;
+    padding: 9px 14px; margin-bottom: 5px;
+  }
+  .digest-item .di-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .digest-item .di-proj {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 500; font-size: 14.5px;
+  }
   .digest-item .di-title { color: var(--muted); font-size: 13px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 140px; }
   .digest-item .di-when { color: var(--faint); font-size: 11px; }
@@ -326,8 +389,9 @@
   /* ---------- dormant ---------- */
   #dormant { margin-top: 26px; }
   #dormant summary {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
     cursor: pointer; color: var(--faint); font-size: 12px;
-    text-transform: uppercase; letter-spacing: 0.08em; user-select: none;
+    text-transform: uppercase; letter-spacing: 0.22em; user-select: none;
   }
   #dormant .cards { margin-top: 12px; display: grid; gap: 14px;
     grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
@@ -351,7 +415,10 @@
     display: flex; align-items: baseline; gap: 10px;
     padding: 16px 22px 12px; border-bottom: 1px solid var(--line);
   }
-  #drawer .d-head h2 { font-size: 17px; }
+  #drawer .d-head h2 {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-size: 17px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  }
   #drawer .d-head .d-path {
     color: var(--faint); font-size: 11px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
@@ -404,6 +471,8 @@
   .md a { color: var(--accent); }
   .md hr { border: none; border-top: 1px solid var(--line); margin: 10px 0; }
 
+  .hl-flash { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
   /* ---------- stats drawer ---------- */
   #wk-chart { cursor: pointer; }
   .heat {
@@ -412,6 +481,9 @@
     margin-top: 10px; overflow-x: auto; padding-bottom: 4px;
   }
   .heat .hc { width: 11px; height: 11px; border-radius: 2px; background: var(--surface2); }
+  .wh { display: grid; grid-template-columns: 28px repeat(24, 1fr); gap: 3px; margin-top: 10px; align-items: center; }
+  .wh .wh-day { color: var(--faint); font-size: 10px; }
+  .wh .hc { height: 11px; border-radius: 2px; background: var(--surface2); }
   .hours { display: flex; align-items: flex-end; gap: 3px; height: 46px; margin-top: 10px; }
   .hours .hb { flex: 1; background: var(--accent); border-radius: 1px 1px 0 0; min-height: 2px; }
   .hours-labels { display: flex; justify-content: space-between; color: var(--faint); font-size: 10px; margin-top: 3px; }
@@ -468,7 +540,7 @@
 <body>
 <header>
   <div id="conn" title="connection"></div>
-  <h1><span class="tilde">❯ </span>~/claude-dashboard</h1>
+  <h1>Claude<span class="tilde"> · </span>Dashboard</h1>
   <input id="search" type="search" placeholder="Search sessions…  ⏎" autocomplete="off">
   <div class="spacer"></div>
   <label id="open-pref-wrap">Open in
@@ -477,6 +549,7 @@
     </select>
   </label>
   <div id="quota"></div>
+  <span id="clock" class="flap" title="board time"></span>
   <button id="gear" title="Settings">⚙</button>
 </header>
 
@@ -527,6 +600,20 @@ function patch(el, html) {
     el.innerHTML = html;
   }
 }
+
+// Board clock. The cell flips on the minute, like everything else up there.
+function tickClock() {
+  const el = $('#clock');
+  const t = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (el.textContent !== t) {
+    el.textContent = t;
+    el.classList.remove('flip');
+    void el.offsetWidth;
+    el.classList.add('flip');
+  }
+}
+setInterval(tickClock, 1000);
+tickClock();
 
 function esc(s) {
   return String(s ?? '')
@@ -601,17 +688,22 @@ function meter(label, pct, title) {
   </div>`;
 }
 
-function statusChip(s) {
+// Status cell: a split-flap that flips when the status actually changes.
+const prevStatusUI = new Map(); // sessionId -> status
+function statusFlap(s) {
+  const changed = prevStatusUI.has(s.sessionId) && prevStatusUI.get(s.sessionId) !== s.status;
+  prevStatusUI.set(s.sessionId, s.status);
+  const flip = changed ? ' flip' : '';
   if (s.status === 'waiting') {
-    return `<span class="chip waiting"><span class="led"></span>${esc(s.waitingFor || 'waiting')}</span>`;
+    return `<span class="flap disp st st-waiting${flip}" title="${esc(s.waitingFor || 'Claude is waiting for your input')}">needs you</span>`;
   }
   if (s.status === 'busy') {
     const quiet = s.quietMin
-      ? ` <span class="chip waiting" title="Busy but no transcript output for ${s.quietMin} minutes — may be stalled">quiet ${s.quietMin}m</span>`
+      ? ` <span class="flap disp st st-quiet" title="Busy but no transcript output for ${s.quietMin} minutes — may be stalled">quiet ${s.quietMin}m</span>`
       : '';
-    return `<span class="chip busy"><span class="led"></span>busy</span>${quiet}`;
+    return `<span class="flap disp st st-busy${flip}">busy</span>${quiet}`;
   }
-  return `<span class="chip"><span class="led"></span>${esc(s.status)}</span>`;
+  return `<span class="flap disp st${flip}">${esc(s.status)}</span>`;
 }
 
 // "claude-fable-5" -> "fable-5"; date-suffixed ids lose the date.
@@ -655,20 +747,26 @@ function gitBadges(git, missing) {
 
 function liveCard(s) {
   const task = s.currentTask
-    ? `<div class="task mono"><span class="prompt-ch">❯</span>${esc(s.currentTask.activeForm)}${
+    ? `<div class="dep-task mono"><span class="prompt-ch">❯</span>${esc(s.currentTask.activeForm)}${
         s.tasksSummary ? `<span class="count">${s.tasksSummary.completed}/${
           s.tasksSummary.completed + s.tasksSummary.inProgress + s.tasksSummary.pending}</span>` : ''}</div>`
     : '';
-  return `<div class="live-card ${s.status === 'waiting' ? 'waiting' : ''}">
-    <div class="top">
-      <span class="proj">${esc(s.projectName)}${s.isWorktree ? ' <span class="badge">worktree</span>' : ''}</span>
-      ${statusChip(s)}
-      ${modelChip(s.model)}
-      <span class="elapsed">${elapsed(s.startedAt)}</span>
+  const dep = s.startedAt
+    ? new Date(s.startedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
+    : '';
+  return `<div class="dep-row ${s.status === 'waiting' ? 'waiting' : ''}">
+    <span class="dep-time" title="session started">${esc(dep)}</span>
+    <span class="dep-proj disp">${esc(s.projectName)}${s.isWorktree ? ' <span class="badge">worktree</span>' : ''}</span>
+    <div class="dep-mid">
+      <div class="dep-title" data-session="${esc(s.sessionId)}" title="Click to watch the transcript live">${esc(s.title || '')}</div>
+      ${task}
     </div>
-    <div class="title" data-session="${esc(s.sessionId)}" style="cursor:pointer" title="Click to watch the transcript live">${esc(s.title || '')}</div>
-    ${task}
-    <div class="foot">${copyBtn(s.resumeCommand)}</div>
+    <div class="dep-right">
+      ${modelChip(s.model)}
+      <span class="dep-elapsed">${elapsed(s.startedAt)}</span>
+      ${statusFlap(s)}
+      ${copyBtn(s.resumeCommand)}
+    </div>
   </div>`;
 }
 
@@ -762,7 +860,7 @@ function digestItem(it) {
     <div class="di-top">
       <span class="di-proj">${esc(it.project)}</span>
       <span class="di-title" data-session="${esc(it.sessionId)}" title="Click to read the transcript">${it.worktree ? `<span class="wt mono">⎇</span> ` : ''}${esc(it.title)}</span>
-      ${running ? '<span class="chip busy"><span class="led"></span>running</span>' : ''}
+      ${running ? '<span class="flap disp st st-busy">running</span>' : ''}
       ${modelChip(it.model)}
       ${fmtCost(it.estCost) ? `<span class="di-when" title="Estimated list-price value of this session">≈${fmtCost(it.estCost)}</span>` : ''}
       <span class="di-when">${time}</span>
@@ -826,9 +924,9 @@ function render(state) {
   // live rail
   const live = state.liveSessions || [];
   patch($('#live'),
-    `<div class="rail-label">Running now — ${live.length || 'none'}</div>` +
+    `<div class="rail-label">Departures — ${live.length || 'none'} running</div>` +
     (live.length
-      ? `<div class="cards">${live.map(liveCard).join('')}</div>`
+      ? `<div class="rows">${live.map(liveCard).join('')}</div>`
       : `<div class="live-none">No sessions running. Start one with <code class="mono">claude</code> in any project.</div>`));
 
   renderGitAttention(state);
@@ -1038,7 +1136,10 @@ function renderDetail(d, name) {
   for (const [key, label] of [['settings', '.claude/settings.json'], ['settingsLocal', '.claude/settings.local.json'], ['mcpJson', '.mcp.json']]) {
     if (d.settings[key]) settingsEntries.push(`<div class="d-file"><div class="d-file-name">${label}</div><div class="md"><pre><code>${esc(d.settings[key])}</code></pre></div></div>`);
   }
+  const muteBtn = `<div style="margin-bottom:10px"><button class="copy" data-mute="${esc(d.path)}" data-muted="${d.muted ? '1' : ''}" title="Per-project desktop notifications">${
+    d.muted ? '🔕 muted — click to unmute' : '🔔 notifying — click to mute'}</button></div>`;
   $('#d-body').innerHTML =
+    muteBtn +
     dSection(`Sessions — ${d.sessions.length}`, sessions, 'No sessions recorded.') +
     dSection('CLAUDE.md', d.claudeMd.length ? dFiles(d.claudeMd, 'name') : null, 'No CLAUDE.md — sessions here start without project instructions.') +
     dSection(`Memory — ${d.memory.length} file${d.memory.length === 1 ? '' : 's'}`, d.memory.length ? dFiles(d.memory, 'name') : null, 'No memory yet.') +
@@ -1135,7 +1236,7 @@ async function pollFollow() {
   } catch { /* transient; next tick retries */ }
 }
 
-async function openTranscript(sessionId) {
+async function openTranscript(sessionId, highlight) {
   openDrawerShell('Transcript', sessionId);
   stopFollow();
   try {
@@ -1159,6 +1260,16 @@ async function openTranscript(sessionId) {
       follow.timer = setInterval(pollFollow, 2500);
     } else {
       follow.id = null;
+      if (highlight) {
+        const needle = highlight.toLowerCase();
+        const hit = [...$('#d-body').querySelectorAll('.t-turn')]
+          .find((el) => el.textContent.toLowerCase().includes(needle));
+        if (hit) {
+          hit.scrollIntoView({ block: 'center' });
+          hit.classList.add('hl-flash');
+          setTimeout(() => hit.classList.remove('hl-flash'), 2400);
+        }
+      }
     }
   } catch {
     $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load the transcript.</div>';
@@ -1172,7 +1283,8 @@ async function runSearch(q) {
     const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
     if (!r.ok) throw new Error();
     const d = await r.json();
-    $('#d-path').textContent = `${d.prompts.length + d.titles.length} results`;
+    const hl = q.replace(/\b(project|since):\S+/gi, '').replace(/\s+/g, ' ').trim();
+    $('#d-path').textContent = `${d.prompts.length + d.titles.length} results — narrow with project:name or since:7d`;
     const titleRows = d.titles.map((t) => `
       <li>
         <span class="s-title" data-session="${esc(t.sessionId)}" title="Click to read the transcript">${esc(t.title)}</span>
@@ -1181,7 +1293,7 @@ async function runSearch(q) {
       </li>`).join('');
     const promptRows = d.prompts.map((p) => `
       <li>
-        <span class="s-title" ${p.sessionId ? `data-session="${esc(p.sessionId)}" title="Click to read the transcript"` : ''}>${esc(p.snippet)}</span>
+        <span class="s-title" ${p.sessionId ? `data-session="${esc(p.sessionId)}" data-hl="${esc(hl)}" title="Click to read the transcript"` : ''}>${esc(p.snippet)}</span>
         <span class="s-when">${esc(p.projectName)}</span>
         <span class="s-when">${relTime(p.timestamp)}</span>
       </li>`).join('');
@@ -1321,8 +1433,19 @@ $('#search').addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('click', async (e) => {
+  const mb = e.target.closest('[data-mute]');
+  if (mb) {
+    const muted = !mb.dataset.muted;
+    const ok = await saveSetting('/api/config', { mutePath: mb.dataset.mute, muted },
+      muted ? 'Notifications muted for this project' : 'Notifications unmuted');
+    if (ok) {
+      mb.dataset.muted = muted ? '1' : '';
+      mb.textContent = muted ? '🔕 muted — click to unmute' : '🔔 notifying — click to mute';
+    }
+    return;
+  }
   const t = e.target.closest('[data-session]');
-  if (t) { openTranscript(t.dataset.session); return; }
+  if (t) { openTranscript(t.dataset.session, t.dataset.hl); return; }
   const nb = e.target.closest('[data-new]');
   if (nb) {
     nb.disabled = true;
@@ -1372,6 +1495,24 @@ async function openStats() {
     const hourBars = s.hours.map((c, h) =>
       `<span class="hb" style="height:${Math.max(4, Math.round((c / hmax) * 100))}%${c ? '' : ';background:var(--surface2)'}"
         title="${esc(`${h}:00 — ${c} prompts`)}"></span>`).join('');
+    const heat = s.heat || [];
+    const wmax = Math.max(1, ...heat.flat());
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const whCells = heat.map((row, d) =>
+      `<span class="wh-day">${dayNames[d]}</span>` + row.map((c, h) => {
+        const style = c ? `background:var(--accent);opacity:${(0.25 + 0.75 * (c / wmax)).toFixed(2)}` : '';
+        return `<span class="hc" style="${style}" title="${esc(`${dayNames[d]} ${h}:00 — ${c} prompt${c === 1 ? '' : 's'}`)}"></span>`;
+      }).join('')
+    ).join('');
+    const costDays = s.costDays || [];
+    const cmax = Math.max(0.01, ...costDays.map((d) => d.cost));
+    const costBars = costDays.map((d) => {
+      const date = new Date(d.t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      return `<span class="hb" style="height:${Math.max(4, Math.round((d.cost / cmax) * 100))}%${d.cost ? '' : ';background:var(--surface2)'}"
+        title="${esc(`${date} — ≈$${d.cost.toFixed(2)} · ${(d.tokens / 1e6).toFixed(1)}M tok`)}"></span>`;
+    }).join('');
+    const costStart = costDays.length
+      ? new Date(costDays[0].t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
     const models = Object.entries(s.byModel).sort((a, b) => b[1].cost - a[1].cost);
     const modelRows = models.map(([m, e]) => `<tr>
       <td>${esc(m)}</td>
@@ -1390,6 +1531,9 @@ async function openStats() {
       dSection('Activity — last 26 weeks', `<div class="heat">${cells.join('')}</div>`) +
       dSection('Busiest hours', `<div class="hours">${hourBars}</div>
         <div class="hours-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>`) +
+      dSection('Weekly rhythm — prompts by day and hour', heat.length ? `<div class="wh">${whCells}</div>` : null, 'No activity yet.') +
+      dSection('Spend — last 90 days', costDays.length ? `<div class="hours">${costBars}</div>
+        <div class="hours-labels"><span>${esc(costStart)}</span><span>today</span></div>` : null, 'No usage recorded yet.') +
       dSection('By model — all time', models.length ? `<table class="stat-table">${modelRows}</table>` : null, 'No usage recorded yet.') +
       dSection('Models by project', projRows ? `<table class="stat-table">${projRows}</table>` : null, 'No project usage yet.') +
       `<div class="stat-totals"><strong>${s.totals.sessions}</strong> sessions · <strong>${s.totals.prompts}</strong> prompts · <strong>≈$${s.totals.cost}</strong> estimated list-price value, all time</div>`;

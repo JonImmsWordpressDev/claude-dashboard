@@ -13,6 +13,7 @@ const { searchHistory, searchTitles } = require('./lib/search');
 const { sessionTitle } = require('./lib/transcripts');
 const { friendlyName } = require('./lib/names');
 const cfg = require('./lib/config');
+const { isProjectMuted } = require('./lib/notify');
 
 const PORT = Number(process.env.CLAUDE_DASH_PORT) || 4517;
 // Default loopback-only. For remote access prefer `tailscale serve` (keeps
@@ -163,6 +164,7 @@ const server = http.createServer((req, res) => {
     projectDetail(known)
       .then((detail) => {
         detail.sessions = collector.allSessions(known);
+        detail.muted = isProjectMuted(known, cfg.readConfig().mutedProjects);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(detail));
       })
@@ -200,7 +202,15 @@ const server = http.createServer((req, res) => {
     readBody(req, res, (payload) => {
       try {
         if (url === '/api/config') {
-          cfg.updateConfig(payload);
+          if (payload.mutePath !== undefined) {
+            const known = collector
+              .projectPaths()
+              .find((p) => p.toLowerCase() === String(payload.mutePath || '').toLowerCase());
+            if (!known) return json(res, 404, { ok: false, error: 'unknown project' });
+            cfg.setProjectMuted(known, payload.muted !== false);
+          } else {
+            cfg.updateConfig(payload);
+          }
         } else if (url === '/api/names') {
           const known = collector
             .projectPaths()
