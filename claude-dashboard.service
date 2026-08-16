@@ -1,0 +1,11 @@
+[Unit]
+Description=Claude Dashboard — local dashboard for Claude Code sessions
+After=default.target
+
+[Service]
+ExecStart=__NODE_PATH__ __APP_DIR__/server.js
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

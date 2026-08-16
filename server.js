@@ -81,6 +81,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // PWA assets, exact names only.
+  if (url === '/manifest.webmanifest' || url === '/icon.svg') {
+    const type = url === '/icon.svg' ? 'image/svg+xml' : 'application/manifest+json';
+    fs.readFile(path.join(__dirname, 'public', url.slice(1)), (err, buf) => {
+      if (err) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'max-age=86400' });
+      res.end(buf);
+    });
+    return;
+  }
+
   // Bundled font files only — no traversal, extension whitelisted.
   if (url.startsWith('/fonts/')) {
     const name = path.basename(url);

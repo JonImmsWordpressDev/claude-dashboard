@@ -1,8 +1,27 @@
 {
   "name": "claude-dashboard",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Local dashboard for Claude Code: live sessions, transcripts, costs, git status — all your projects in one place.",
   "main": "server.js",
+  "bin": {
+    "claude-dashboard": "bin/claude-dashboard.js"
+  },
+  "files": [
+    "server.js",
+    "lib/",
+    "public/",
+    "bin/",
+    "install.sh",
+    "uninstall.sh",
+    "install.ps1",
+    "uninstall.ps1",
+    "com.claude-dashboard.plist",
+    "claude-dashboard.service",
+    "menubar/",
+    "config.example.json",
+    "names.example.json",
+    "ignore.example.json"
+  ],
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/pure-logic.test.js"

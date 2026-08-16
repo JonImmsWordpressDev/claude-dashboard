@@ -419,3 +419,13 @@ test('transcriptLineMatch skips tool results, harness noise, and non-matches', (
   const miss = JSON.stringify({ type: 'user', message: { content: 'nothing here' } });
   assert.equal(transcriptLineMatch(miss, 'postgres'), null);
 });
+
+// --- Linux terminal detection ---
+const { findOnPath } = require('../lib/config');
+
+test('findOnPath walks PATH dirs with the injected exists check', () => {
+  const exists = (p) => p === '/usr/bin/kitty';
+  assert.equal(findOnPath('kitty', '/usr/local/bin:/usr/bin', exists), '/usr/bin/kitty');
+  assert.equal(findOnPath('missing', '/usr/local/bin:/usr/bin', exists), null);
+  assert.equal(findOnPath('kitty', '', exists), null);
+});

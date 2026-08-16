@@ -4,9 +4,25 @@ A local, zero-dependency dashboard for all your [Claude Code](https://claude.com
 
 Everything is read from local files under `~/.claude`, and it never writes to Claude's data — read-only. No API keys to configure. The only automatic network call is to Anthropic's own usage API for your quota meters, authenticated with the Keychain credentials Claude Code already holds (kept in memory, toggleable in settings). Plain Node.js (which Claude Code already requires), zero npm dependencies, macOS.
 
-**Requirements:** macOS (or Windows, experimental — see below), Node.js ≥ 18, Claude Code.
+**Requirements:** macOS or Linux (or Windows, experimental — see below), Node.js ≥ 18, Claude Code.
 
 ![Claude Dashboard, dark mode — live sessions, unpushed-work strip, and the daily digest](docs/screenshots/dashboard-dark.png)
+
+## Try it in one command
+
+```bash
+npx claude-dashboard
+```
+
+That downloads nothing permanent, starts the server, and prints the URL. Like it? Install it for real below.
+
+Homebrew works too:
+
+```bash
+brew tap jonimmswordpressdev/claude-dashboard
+brew install claude-dashboard
+brew services start claude-dashboard   # always-on, starts at login
+```
 
 ## Install (always-on)
 
@@ -14,9 +30,11 @@ Everything is read from local files under `~/.claude`, and it never writes to Cl
 ./install.sh
 ```
 
-That registers a LaunchAgent so the server runs at login and restarts if it dies. Then open <http://127.0.0.1:4517> — in Safari, use **File → Add to Dock** to get a standalone app-like window with its own Dock icon.
+That registers a LaunchAgent (macOS) or a systemd user service (Linux) so the server runs at login and restarts if it dies. Then open <http://127.0.0.1:4517> — in Safari, use **File → Add to Dock** to get a standalone app-like window with its own Dock icon; in Chrome or Edge, use the install-app button in the address bar (the dashboard is a PWA).
 
 Uninstall with `./uninstall.sh`.
+
+On Linux: logs are in `journalctl --user -u claude-dashboard`, notifications use `notify-send`, and sessions open in kitty, Alacritty, GNOME Terminal, Konsole, or xterm — whichever is installed.
 
 ## Run manually instead
 

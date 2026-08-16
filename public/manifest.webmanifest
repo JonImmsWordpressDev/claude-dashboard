@@ -1,0 +1,12 @@
+{
+  "name": "Claude Dashboard",
+  "short_name": "Claude Dash",
+  "description": "Local dashboard for Claude Code: live sessions, transcripts, costs, git status.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1215",
+  "theme_color": "#0d1215",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
