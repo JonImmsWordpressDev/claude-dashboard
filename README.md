@@ -20,6 +20,7 @@ Homebrew works too:
 
 ```bash
 brew tap jonimmswordpressdev/claude-dashboard
+brew trust jonimmswordpressdev/claude-dashboard   # newer brew asks once for third-party taps
 brew install claude-dashboard
 brew services start claude-dashboard   # always-on, starts at login
 ```
