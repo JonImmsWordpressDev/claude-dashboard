@@ -9,7 +9,7 @@ const { Collector } = require('./lib/collector');
 const { openSession, openNewSession } = require('./lib/opener');
 const { projectDetail } = require('./lib/detail');
 const { sessionTranscript } = require('./lib/transcript-view');
-const { searchHistory, searchTitles } = require('./lib/search');
+const { searchHistory, searchTitles, searchTranscripts } = require('./lib/search');
 const { sessionTitle } = require('./lib/transcripts');
 const { friendlyName } = require('./lib/names');
 const cfg = require('./lib/config');
@@ -202,6 +202,13 @@ const server = http.createServer((req, res) => {
     readBody(req, res, (payload) => {
       try {
         if (url === '/api/config') {
+          if (payload.pinSession !== undefined) {
+            const id = String(payload.pinSession || '');
+            if (!collector.findSessionFile(id)) return json(res, 404, { ok: false, error: 'unknown session' });
+            const pinned = cfg.togglePin(id);
+            collector.assemble();
+            return json(res, 200, { ok: true, pinned });
+          }
           if (payload.mutePath !== undefined) {
             const known = collector
               .projectPaths()
@@ -264,13 +271,18 @@ const server = http.createServer((req, res) => {
       res.end('{"error":"query too short"}');
       return;
     }
-    searchHistory(q)
-      .then((prompts) => {
+    const deep = new URL(req.url, 'http://localhost').searchParams.get('deep') === '1';
+    Promise.all([
+      searchHistory(q),
+      deep ? searchTranscripts(q, collector.raw.transcriptGroups) : Promise.resolve(null),
+    ])
+      .then(([prompts, transcripts]) => {
         const titles = searchTitles(q, collector.raw.transcriptGroups, sessionTitle);
         for (const r of prompts) r.projectName = friendlyName(r.project);
         for (const r of titles) r.projectName = friendlyName(r.project);
+        if (transcripts) for (const r of transcripts.matches) r.projectName = friendlyName(r.project);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ q, prompts, titles }));
+        res.end(JSON.stringify({ q, prompts, titles, transcripts }));
       })
       .catch((e) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });

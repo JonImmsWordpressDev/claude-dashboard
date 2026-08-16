@@ -321,6 +321,21 @@
   #wk-chart rect:hover { opacity: 0.75; }
   .none-yet { color: var(--faint); font-size: 12px; padding: 10px 0 4px; }
 
+  /* ---------- pinned strip ---------- */
+  #pinned { margin-bottom: 16px; }
+  #pinned .pin-label {
+    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.22em;
+    color: var(--faint); margin-bottom: 6px;
+  }
+  #pinned .pin-row {
+    display: flex; align-items: baseline; gap: 10px;
+    background: var(--surface); border-radius: 2px;
+    padding: 7px 14px; margin-bottom: 4px;
+  }
+  #pinned .pin-row .star { color: var(--warn); flex: none; }
+  .s-role { color: var(--faint); margin-right: 4px; }
+
   /* ---------- git attention strip ---------- */
   #git-attn {
     display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px;
@@ -476,6 +491,7 @@
     color: var(--faint); font-size: 11px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
   }
+  #drawer .d-actions { display: flex; gap: 2px; align-items: center; flex: none; }
   #drawer .d-close {
     border: none; background: none; color: var(--muted); cursor: pointer;
     font-size: 18px; padding: 2px 8px; border-radius: 2px;
@@ -609,6 +625,7 @@
 
 <section id="live"></section>
 <main>
+  <div id="pinned" hidden></div>
   <div id="git-attn" hidden></div>
   <details id="digest" open>
     <summary>
@@ -645,6 +662,7 @@
   <div class="d-head">
     <h2 id="d-title"></h2>
     <span class="d-path" id="d-path"></span>
+    <span class="d-actions" id="d-actions"></span>
     <button class="d-close" id="d-close" title="Close (Esc)">✕</button>
   </div>
   <div class="d-body" id="d-body"></div>
@@ -863,6 +881,22 @@ function projectCard(p) {
   </div>`;
 }
 
+function renderPinned(state) {
+  const el = $('#pinned');
+  const pins = state.pinned || [];
+  el.hidden = !pins.length;
+  if (!pins.length) { patch(el, ''); return; }
+  patch(el, `<div class="pin-label">Pinned</div>` + pins.map((p) => `
+    <div class="pin-row">
+      <span class="star">★</span>
+      <span class="s-title" data-session="${esc(p.sessionId)}" title="Click to read the transcript">${esc(p.title)}</span>
+      ${modelChip(p.model)}
+      <span class="s-when">${esc(p.projectName)}</span>
+      <span class="s-when">${relTime(p.lastActivityAt)}</span>
+      <button class="copy" data-pin="${esc(p.sessionId)}" title="Unpin">unpin</button>
+    </div>`).join(''));
+}
+
 const DORMANT_MS = 60 * 24 * 60 * 60 * 1000;
 
 // ---------- git attention strip: repos with work sitting unpushed ----------
@@ -999,6 +1033,7 @@ function render(state) {
       : `<div class="live-none">No sessions running. Start one with <code class="mono">claude</code> in any project.</div>`));
 
   renderGitAttention(state);
+  renderPinned(state);
   if (typeof mcSync === 'function') mcSync();
   renderDigest(state);
 
@@ -1223,6 +1258,7 @@ async function openDetail(path, name) {
   backdrop.hidden = false;
   $('#d-title').textContent = name;
   $('#d-path').textContent = path;
+  $('#d-actions').innerHTML = '';
   $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Loading…</div>';
   try {
     const r = await fetch(`/api/project?path=${encodeURIComponent(path)}`);
@@ -1235,16 +1271,19 @@ async function openDetail(path, name) {
 
 function closeDetail() {
   if (typeof stopFollow === 'function') stopFollow();
+  if (typeof stopReplay === 'function') stopReplay(false);
   $('#drawer').hidden = true;
   $('#drawer-backdrop').hidden = true;
 }
 
 function openDrawerShell(title, sub) {
   if (typeof stopFollow === 'function') stopFollow();
+  if (typeof stopReplay === 'function') stopReplay(false);
   $('#drawer').hidden = false;
   $('#drawer-backdrop').hidden = false;
   $('#d-title').textContent = title;
   $('#d-path').textContent = sub || '';
+  $('#d-actions').innerHTML = '';
   $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Loading…</div>';
 }
 
@@ -1282,8 +1321,42 @@ function transcriptHtml(events, st = follow) {
 let exportableSession = null;
 function transcriptStatus() {
   const liveNow = follow.id && liveIds.has(follow.id);
-  $('#d-path').innerHTML = `${esc(follow.projectName)} · ${follow.eventCount} events${liveNow ? ' · ● live' : ''}
-    <button class="copy" data-export title="Download this transcript as markdown">export ⇩</button>`;
+  const sid = exportableSession && exportableSession.id;
+  const isPinned = sid && (lastState?.pinned || []).some((p) => p.sessionId === sid);
+  $('#d-path').textContent = `${follow.projectName} · ${follow.eventCount} events${liveNow ? ' · ● live' : ''}`;
+  $('#d-actions').innerHTML = `
+    <button class="copy" data-export title="Download this transcript as markdown">export ⇩</button>
+    ${sid ? `<button class="copy" data-pin="${esc(sid)}" title="${isPinned ? 'Unpin this session' : 'Pin this session to the top of the dashboard'}">${isPinned ? '★ pinned' : '☆ pin'}</button>` : ''}
+    ${!liveNow ? '<button class="copy" data-replay title="Play the conversation back turn by turn">replay ▸</button>' : ''}`;
+}
+
+// ---------- session replay ----------
+let replay = null;
+function stopReplay(reveal = true) {
+  if (!replay) return;
+  clearInterval(replay.timer);
+  if (reveal) for (const n of replay.nodes) n.style.display = '';
+  replay = null;
+  const b = document.querySelector('[data-replay]');
+  if (b) b.textContent = 'replay ▸';
+}
+function startReplay() {
+  const nodes = [...$('#d-body').children];
+  if (!nodes.length) return;
+  for (const n of nodes) n.style.display = 'none';
+  $('#d-body').scrollTop = 0;
+  let i = 0;
+  replay = {
+    nodes,
+    timer: setInterval(() => {
+      if (i >= nodes.length) { stopReplay(false); return; }
+      nodes[i].style.display = '';
+      nodes[i].scrollIntoView({ block: 'nearest' });
+      i++;
+    }, 280),
+  };
+  const b = document.querySelector('[data-replay]');
+  if (b) b.textContent = 'stop ■';
 }
 
 async function pollFollow() {
@@ -1459,14 +1532,26 @@ $('#mc-btn').addEventListener('click', openMissionControl);
 $('#mc-close').addEventListener('click', closeMissionControl);
 
 // ---------- search ----------
-async function runSearch(q) {
-  openDrawerShell(`Search — "${q}"`, '');
+async function runSearch(q, deep) {
+  openDrawerShell(`Search — "${q}"`, deep ? 'searching full transcripts…' : '');
   try {
-    const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const r = await fetch(`/api/search?q=${encodeURIComponent(q)}${deep ? '&deep=1' : ''}`);
     if (!r.ok) throw new Error();
     const d = await r.json();
     const hl = q.replace(/\b(project|since):\S+/gi, '').replace(/\s+/g, ' ').trim();
-    $('#d-path').textContent = `${d.prompts.length + d.titles.length} results — narrow with project:name or since:7d`;
+    const t = d.transcripts;
+    const deepRows = t ? t.matches.map((m) => `
+      <li>
+        <span class="s-title" data-session="${esc(m.sessionId)}" data-hl="${esc(hl)}" title="Click to open at this match"><span class="s-role">${m.role === 'you' ? 'you' : '❯'}</span> ${esc(m.text)}</span>
+        <span class="s-when">${esc(m.projectName)}</span>
+        <span class="s-when">${m.ts ? relTime(m.ts) : ''}</span>
+      </li>`).join('') : '';
+    const deepSection = t
+      ? dSection(`Inside transcripts — ${t.matches.length}${t.complete ? '' : ` (newest ${t.scanned} of ${t.total} sessions)`}`,
+          deepRows ? `<ul class="d-sessions">${deepRows}</ul>` : null, 'No matches inside transcripts.')
+      : `<div style="margin:14px 0"><button class="copy" data-deep-search="${esc(q)}">search inside full transcripts →</button>
+         <span class="s-when" style="margin-left:8px">reads every conversation, not just your prompts</span></div>`;
+    $('#d-path').textContent = `${d.prompts.length + d.titles.length + (t ? t.matches.length : 0)} results — narrow with project:name or since:7d`;
     const titleRows = d.titles.map((t) => `
       <li>
         <span class="s-title" data-session="${esc(t.sessionId)}" title="Click to read the transcript">${esc(t.title)}</span>
@@ -1481,7 +1566,8 @@ async function runSearch(q) {
       </li>`).join('');
     $('#d-body').innerHTML =
       dSection(`Session titles — ${d.titles.length}`, titleRows ? `<ul class="d-sessions">${titleRows}</ul>` : null, 'No title matches.') +
-      dSection(`Prompts — ${d.prompts.length}`, promptRows ? `<ul class="d-sessions">${promptRows}</ul>` : null, 'No prompt matches.');
+      dSection(`Prompts — ${d.prompts.length}`, promptRows ? `<ul class="d-sessions">${promptRows}</ul>` : null, 'No prompt matches.') +
+      deepSection;
   } catch {
     $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Search failed.</div>';
   }
@@ -1625,6 +1711,26 @@ $('#search').addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('click', async (e) => {
+  const pin = e.target.closest('[data-pin]');
+  if (pin) {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinSession: pin.dataset.pin }),
+    }).then((x) => x.json()).catch(() => null);
+    if (r && r.ok) {
+      toast(r.pinned ? 'Pinned to the top of the dashboard' : 'Unpinned');
+      if (pin.closest('#drawer')) pin.textContent = r.pinned ? '★ pinned' : '☆ pin';
+    } else {
+      toast("Couldn't update the pin");
+    }
+    return;
+  }
+  if (e.target.closest('[data-replay]')) {
+    if (replay) stopReplay(true);
+    else startReplay();
+    return;
+  }
   const mb = e.target.closest('[data-mute]');
   if (mb) {
     const muted = !mb.dataset.muted;
@@ -1742,6 +1848,8 @@ async function openStats() {
 
 document.addEventListener('click', (e) => {
   if (e.target.closest('#wk-chart')) openStats();
+  const ds = e.target.closest('[data-deep-search]');
+  if (ds) runSearch(ds.dataset.deepSearch, true);
 });
 
 // ---------- weekly report ----------

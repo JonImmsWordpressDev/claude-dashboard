@@ -396,3 +396,26 @@ test('typicalWait names the median bucket', () => {
   assert.equal(typicalWait([1, 1, 4, 0]), 'under 10m');
   assert.equal(typicalWait([0, 0, 0, 0]), null);
 });
+
+// --- Full-text transcript search ---
+const { transcriptLineMatch } = require('../lib/search');
+
+test('transcriptLineMatch finds text in user and assistant turns', () => {
+  const u = JSON.stringify({ type: 'user', timestamp: '2026-08-10T14:00:00Z', message: { content: 'where is the Postgres config' } });
+  const a = JSON.stringify({ type: 'assistant', timestamp: '2026-08-10T14:00:05Z', message: { content: [{ type: 'text', text: 'The postgres settings live in db.yml' }] } });
+  const mu = transcriptLineMatch(u, 'postgres');
+  assert.equal(mu.role, 'you');
+  assert.ok(mu.text.includes('Postgres config'));
+  const ma = transcriptLineMatch(a, 'postgres');
+  assert.equal(ma.role, 'claude');
+  assert.ok(ma.text.includes('db.yml'));
+});
+
+test('transcriptLineMatch skips tool results, harness noise, and non-matches', () => {
+  const tool = JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'x', content: 'postgres blah' }] } });
+  assert.equal(transcriptLineMatch(tool, 'postgres'), null);
+  const noise = JSON.stringify({ type: 'user', message: { content: '<system-reminder>postgres</system-reminder>' } });
+  assert.equal(transcriptLineMatch(noise, 'postgres'), null);
+  const miss = JSON.stringify({ type: 'user', message: { content: 'nothing here' } });
+  assert.equal(transcriptLineMatch(miss, 'postgres'), null);
+});
