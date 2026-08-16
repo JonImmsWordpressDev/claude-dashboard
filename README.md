@@ -11,7 +11,7 @@ Everything is read from local files under `~/.claude`, and it never writes to Cl
 ## Try it in one command
 
 ```bash
-npx claude-dashboard
+npx claude-mission-control
 ```
 
 That downloads nothing permanent, starts the server, and prints the URL. Like it? Install it for real below.
