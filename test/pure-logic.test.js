@@ -345,3 +345,54 @@ test('subagentSummary is null without subagents', () => {
   assert.equal(subagentSummary({}), null);
   assert.equal(subagentSummary({ subagentCount: 0 }), null);
 });
+
+// --- Insights: response-time buckets ---
+function userLine(ts, text) {
+  return JSON.stringify({ type: 'user', timestamp: ts, message: { content: text } });
+}
+
+test('scanLine buckets the gap between assistant output and your next prompt', () => {
+  const scan = freshScan();
+  const t0 = new Date(2026, 7, 10, 14, 0, 0).getTime();
+  scanLine(assistantLine({ id: 'm1', model: 'claude-opus-5', ts: new Date(t0).toISOString(), input: 10 }), scan);
+  scanLine(userLine(new Date(t0 + 12000).toISOString(), 'next question'), scan);
+  assert.deepEqual(scan.waits, [1, 0, 0, 0]); // 12s -> under 30s
+  scanLine(assistantLine({ id: 'm2', model: 'claude-opus-5', ts: new Date(t0 + 60000).toISOString(), input: 10 }), scan);
+  scanLine(userLine(new Date(t0 + 60000 + 5 * 60000).toISOString(), 'later'), scan);
+  assert.deepEqual(scan.waits, [1, 0, 1, 0]); // 5m -> under 10m
+});
+
+test('scanLine wait tracking ignores tool results, long gaps, and double counts', () => {
+  const scan = freshScan();
+  const t0 = new Date(2026, 7, 10, 14, 0, 0).getTime();
+  scanLine(assistantLine({ id: 'm1', model: 'claude-opus-5', ts: new Date(t0).toISOString(), input: 10 }), scan);
+  // tool result (user-type record) must not count
+  scanLine(JSON.stringify({ type: 'user', timestamp: new Date(t0 + 2000).toISOString(), message: { content: [{ type: 'tool_result', tool_use_id: 'x', content: 'ok' }] } }), scan);
+  // away for 45 minutes: consumed but not counted
+  scanLine(userLine(new Date(t0 + 45 * 60000).toISOString(), 'back now'), scan);
+  // second prompt with no assistant in between: not counted
+  scanLine(userLine(new Date(t0 + 46 * 60000).toISOString(), 'another'), scan);
+  assert.deepEqual(scan.waits || [0, 0, 0, 0], [0, 0, 0, 0]);
+});
+
+// --- Budgets ---
+const { budgetLevel } = require('../lib/pricing');
+
+test('budgetLevel reports the highest threshold crossed', () => {
+  assert.equal(budgetLevel(50, 100), 0);
+  assert.equal(budgetLevel(75, 100), 75);
+  assert.equal(budgetLevel(92, 100), 90);
+  assert.equal(budgetLevel(140, 100), 100);
+});
+
+test('budgetLevel is 0 without a budget', () => {
+  assert.equal(budgetLevel(50, 0), 0);
+  assert.equal(budgetLevel(50, null), 0);
+});
+
+test('typicalWait names the median bucket', () => {
+  const { typicalWait } = require('../lib/pricing');
+  assert.equal(typicalWait([5, 1, 0, 0]), 'under 30s');
+  assert.equal(typicalWait([1, 1, 4, 0]), 'under 10m');
+  assert.equal(typicalWait([0, 0, 0, 0]), null);
+});

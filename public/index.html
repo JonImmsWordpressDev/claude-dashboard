@@ -972,9 +972,13 @@ function render(state) {
         plan.extraUsage ? 'extra usage enabled' : null,
       ].filter(Boolean).join(' · '))}">${esc(plan.label)}</span>`
     : '';
+  const b = state.budget;
+  const budgetMeter = b
+    ? meter('budget', (b.spent / b.limit) * 100, `≈$${b.spent.toFixed(0)} of your $${b.limit} weekly budget (7-day estimate)`)
+    : '';
   const spendChip = planChip + (fmtCost(spend)
     ? `${weeklyChart(state.weeklyCost)}<span title="Estimated list-price value of all sessions in the last 7 days — relative weight, not billed dollars">7d ≈${fmtCost(spend)}</span>`
-    : '');
+    : '') + budgetMeter;
   if (q) {
     qEl.className = q.stale ? 'stale' : '';
     patch(qEl, spendChip +
@@ -1534,6 +1538,11 @@ async function openSettings() {
         <input type="checkbox" id="set-usage" ${c.usageApi !== false ? 'checked' : ''}>
       </div>
       <div class="set-row">
+        <span class="set-label">Weekly budget<span class="set-sub">estimated $ per trailing 7 days — header meter plus alerts at 75/90/100%; 0 turns it off</span></span>
+        <input type="text" id="set-budget" inputmode="numeric" style="width:70px;text-align:right"
+          value="${c.weeklyBudget || 0}" placeholder="0">
+      </div>
+      <div class="set-row">
         <span class="set-label">Version ${esc(c.version || '?')}<span class="set-sub">checks GitHub only when you click — never automatically</span></span>
         <span id="set-update-result" style="color:var(--faint);font-size:12px"></span>
         <button class="copy" id="set-update">check for updates</button>
@@ -1577,6 +1586,11 @@ async function openSettings() {
       saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
     $('#set-usage').addEventListener('change', (e) =>
       saveSetting('/api/config', { usageApi: e.target.checked }, e.target.checked ? 'Usage meters on' : 'Usage meters off — header falls back to the statusline cache'));
+    $('#set-budget').addEventListener('change', (e) => {
+      const n = Math.max(0, Math.round(Number(e.target.value) || 0));
+      e.target.value = n;
+      saveSetting('/api/config', { weeklyBudget: n }, n ? `Weekly budget set to $${n}` : 'Weekly budget off');
+    });
     $('#set-terminal').addEventListener('change', async (e) => {
       await saveSetting('/api/config', { terminal: e.target.value }, `Sessions will open in ${e.target.selectedOptions[0].text}`);
       loadOpenPref(); // header label follows the choice
@@ -1711,6 +1725,7 @@ async function openStats() {
       return `<tr><td>${esc(p.name)}</td><td style="text-align:left;color:var(--muted)">${parts}</td><td>≈$${p.total.toFixed(2)}</td></tr>`;
     }).join('');
     $('#d-body').innerHTML =
+      '<div style="margin-top:10px"><button class="copy" data-week>your week with Claude →</button></div>' +
       dSection('Activity — last 26 weeks', `<div class="heat">${cells.join('')}</div>`) +
       dSection('Busiest hours', `<div class="hours">${hourBars}</div>
         <div class="hours-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>`) +
@@ -1727,6 +1742,59 @@ async function openStats() {
 
 document.addEventListener('click', (e) => {
   if (e.target.closest('#wk-chart')) openStats();
+});
+
+// ---------- weekly report ----------
+let weekReport = null;
+async function openWeekReport() {
+  openDrawerShell('Your week with Claude', 'trailing 7 days · ignored projects excluded');
+  try {
+    const r = await fetch('/api/stats');
+    if (!r.ok) throw new Error();
+    const s = await r.json();
+    const w = s.week || {};
+    const b = lastState && lastState.budget;
+    const waitTotal = (w.waits || []).reduce((a, x) => a + x, 0);
+    const rows = [
+      ['Sessions', String(w.sessions ?? 0)],
+      ['Prompts', String(w.prompts ?? 0)],
+      ['Estimated spend', `≈$${(w.cost || 0).toFixed(2)}${b ? ` of your $${b.limit} budget` : ''}`],
+      ['Busiest day', w.busiestDay || '—'],
+      ['Busiest hour', w.busiestHour != null ? `${w.busiestHour}:00` : '—'],
+      ['Models', (w.models || []).map(modelShort).join(' · ') || '—'],
+      ['Your typical reply time', w.typicalWait ? `${w.typicalWait} (${waitTotal} prompts measured)` : 'not enough data yet'],
+    ];
+    weekReport = { w, b, rows };
+    const table = `<table class="stat-table">${rows.map(([k, v]) =>
+      `<tr><td>${esc(k)}</td><td style="text-align:right">${esc(v)}</td></tr>`).join('')}</table>`;
+    const projRows = (w.projects || []).map((p) =>
+      `<tr><td>${esc(p.name)}</td><td style="text-align:right">≈$${p.cost.toFixed(2)}</td></tr>`).join('');
+    $('#d-body').innerHTML =
+      dSection('The week', table) +
+      dSection('Where it went', projRows ? `<table class="stat-table">${projRows}</table>` : null, 'No spend recorded this week.') +
+      '<div style="margin-top:16px"><button class="copy" data-week-export>download as markdown ⇩</button></div>';
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load the report.</div>';
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-week]')) { openWeekReport(); return; }
+  if (!e.target.closest('[data-week-export]') || !weekReport) return;
+  const { w, rows } = weekReport;
+  const lines = ['# Your week with Claude', '', `_${new Date().toLocaleDateString()} — trailing 7 days_`, ''];
+  for (const [k, v] of rows) lines.push(`- **${k}:** ${v}`);
+  if ((w.projects || []).length) {
+    lines.push('', '## Where it went', '');
+    for (const p of w.projects) lines.push(`- ${p.name}: ≈$${p.cost.toFixed(2)}`);
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'week-with-claude.md';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Report downloaded');
 });
 
 // ---------- transcript export ----------
@@ -1763,6 +1831,7 @@ function paletteItems(q) {
   items.push({ k: '⚙', label: 'Settings', hint: 'rename, hide, terminal, notifications', run: openSettings });
   items.push({ k: '▦', label: 'Mission Control', hint: 'every live session at once', run: openMissionControl });
   items.push({ k: '▲', label: 'Stats', hint: 'heatmap · models · hours', run: openStats });
+  items.push({ k: '☰', label: 'Your week with Claude', hint: '7-day report · export', run: openWeekReport });
   for (const l of st.liveSessions || []) {
     items.push({ k: '●', label: `Watch live: ${l.projectName} — ${l.title || ''}`, hint: l.status, run: () => openTranscript(l.sessionId) });
   }
