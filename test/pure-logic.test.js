@@ -429,3 +429,30 @@ test('findOnPath walks PATH dirs with the injected exists check', () => {
   assert.equal(findOnPath('missing', '/usr/local/bin:/usr/bin', exists), null);
   assert.equal(findOnPath('kitty', '', exists), null);
 });
+
+// --- What did Claude change: git log parsing + session linking ---
+const { parseGitLog, linkCommitsToSessions } = require('../lib/gitlog');
+
+test('parseGitLog splits records and attaches shortstat', () => {
+  const raw = '\x1eaaa111\x1f1755200000\x1fFix the header\x1fJon Imms\x1fClaude Fable 5 <noreply@anthropic.com>\n' +
+    ' 3 files changed, 40 insertions(+), 9 deletions(-)\n' +
+    '\x1ebbb222\x1f1755100000\x1fManual tweak\x1fJon Imms\x1f\n';
+  const commits = parseGitLog(raw);
+  assert.equal(commits.length, 2);
+  assert.equal(commits[0].sha, 'aaa111');
+  assert.equal(commits[0].ts, 1755200000000);
+  assert.equal(commits[0].subject, 'Fix the header');
+  assert.equal(commits[0].claude, true);
+  assert.equal(commits[0].stat, '3 files changed, 40 insertions(+), 9 deletions(-)');
+  assert.equal(commits[1].claude, false);
+  assert.equal(commits[1].stat, null);
+});
+
+test('linkCommitsToSessions matches a commit inside a session activity window', () => {
+  const commits = [{ sha: 'aaa111', ts: 1000000, claude: true }, { sha: 'bbb222', ts: 5000000, claude: true }];
+  const sessions = [{ sessionId: 's1', title: 'Build the thing', startedAt: 900000, lastActivityAt: 1200000 }];
+  const linked = linkCommitsToSessions(commits, sessions);
+  assert.equal(linked[0].sessionId, 's1');
+  assert.equal(linked[0].sessionTitle, 'Build the thing');
+  assert.equal(linked[1].sessionId, undefined);
+});

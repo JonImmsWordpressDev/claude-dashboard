@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Dashboard</title>
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0d1215" media="(prefers-color-scheme: dark)">
@@ -35,6 +36,7 @@
      broken. Oswald condensed caps carry names; JetBrains Mono carries data.
      Light theme is the same timetable, printed on paper. */
   :root {
+    --disp-font: 'Oswald', 'Arial Narrow', sans-serif;
     --bg: #f5f4f0;
     --surface: #ecebe5;
     --surface2: #e0dfd8;
@@ -76,6 +78,29 @@
       --amber-ink: #0d1215;
     }
   }
+  /* Phosphor theme: green-on-black terminal — a deliberate single-look skin,
+     so it overrides both light and dark palettes. */
+  :root[data-theme="phosphor"] {
+    --disp-font: 'JetBrains Mono', ui-monospace, monospace;
+    --bg: #050a06;
+    --surface: #0a120c;
+    --surface2: #122015;
+    --ink: #8fdf9a;
+    --muted: #55a061;
+    --faint: #35603d;
+    --line: #16301c;
+    --accent: #46e07a;
+    --warn: #ffb020;
+    --bad: #ff5f45;
+    --chip-bg: #122015;
+    --warn-bg: rgba(255, 176, 32, 0.10);
+    --accent-bg: rgba(70, 224, 122, 0.08);
+    --glow: 0 0 8px;
+    --flap: #0a120c;
+    --flap-hi: #0e1810;
+    --flap-split: rgba(0, 0, 0, 0.5);
+    --amber-ink: #050a06;
+  }
   * { box-sizing: border-box; margin: 0; }
   html { -webkit-text-size-adjust: 100%; }
   body {
@@ -89,7 +114,7 @@
 
   /* Display face: condensed caps, the board's letter-painted voice. */
   .disp {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
   }
   /* Split-flap cell: gradient face with the horizontal split line. */
@@ -116,7 +141,7 @@
     background: var(--surface);
   }
   header h1 {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     font-size: 19px; font-weight: 600; letter-spacing: 0.10em;
     text-transform: uppercase; white-space: nowrap;
   }
@@ -152,7 +177,7 @@
     border-bottom: 2px solid var(--line);
   }
   #live .rail-label {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     font-size: 12px; text-transform: uppercase; letter-spacing: 0.22em;
     color: var(--faint); margin-bottom: 10px;
   }
@@ -217,7 +242,7 @@
   }
   .card .head { display: flex; align-items: center; gap: 8px; }
   .card .name {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     text-transform: uppercase; letter-spacing: 0.05em;
     font-weight: 500; font-size: 15px;
   }
@@ -267,11 +292,18 @@
   }
   #search:focus { outline: 2px solid var(--accent); outline-offset: 0; }
   #search::placeholder { color: var(--faint); }
-  #gear, #mc-btn {
+  #gear, #mc-btn, #bell-btn {
     border: none; background: none; color: var(--muted); cursor: pointer;
     font-size: 15px; padding: 2px 6px; border-radius: 2px; margin-left: 4px;
   }
-  #gear:hover, #mc-btn:hover { background: var(--surface2); color: var(--ink); }
+  #gear:hover, #mc-btn:hover, #bell-btn:hover { background: var(--surface2); color: var(--ink); }
+  #bell-btn { position: relative; }
+  #bell-badge {
+    position: absolute; top: -3px; right: -3px;
+    background: var(--warn); color: var(--amber-ink);
+    font: 700 9.5px 'JetBrains Mono', monospace;
+    border-radius: 8px; padding: 1px 4px; min-width: 10px; text-align: center;
+  }
 
   /* settings drawer */
   .set-row {
@@ -325,7 +357,7 @@
   /* ---------- pinned strip ---------- */
   #pinned { margin-bottom: 16px; }
   #pinned .pin-label {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.22em;
     color: var(--faint); margin-bottom: 6px;
   }
@@ -335,6 +367,23 @@
     padding: 7px 14px; margin-bottom: 4px;
   }
   #pinned .pin-row .star { color: var(--warn); flex: none; }
+
+  /* ---------- day timeline ---------- */
+  .tl-lane { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .tl-name {
+    flex: none; width: 110px; font-size: 12.5px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tl-track {
+    position: relative; flex: 1; height: 16px;
+    background: var(--surface); border-radius: 2px; overflow: hidden;
+  }
+  .tl-bar {
+    position: absolute; top: 3px; bottom: 3px; border-radius: 2px;
+    background: var(--accent); opacity: 0.8; cursor: pointer; min-width: 3px;
+  }
+  .tl-bar:hover { opacity: 1; }
+  .tl-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warn); }
   .s-role { color: var(--faint); margin-right: 4px; }
 
   /* ---------- git attention strip ---------- */
@@ -357,7 +406,7 @@
   }
   #digest summary::-webkit-details-marker { display: none; }
   #digest-label {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     font-size: 12px; text-transform: uppercase; letter-spacing: 0.22em;
     color: var(--faint);
   }
@@ -375,7 +424,7 @@
   #digest-range button.sel { background: var(--surface2); color: var(--ink); }
   #digest-body { margin-top: 10px; }
   .digest-day {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     color: var(--faint); font-size: 11.5px; text-transform: uppercase;
     letter-spacing: 0.22em; margin: 16px 0 6px;
   }
@@ -385,7 +434,7 @@
   }
   .digest-item .di-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .digest-item .di-proj {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     text-transform: uppercase; letter-spacing: 0.05em;
     font-weight: 500; font-size: 14.5px;
   }
@@ -405,7 +454,7 @@
   /* ---------- dormant ---------- */
   #dormant { margin-top: 26px; }
   #dormant summary {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     cursor: pointer; color: var(--faint); font-size: 12px;
     text-transform: uppercase; letter-spacing: 0.22em; user-select: none;
   }
@@ -426,7 +475,7 @@
     background: var(--surface); flex: none;
   }
   .mc-title {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     font-size: 16px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
   }
   .mc-sub { color: var(--faint); font-size: 12px; }
@@ -449,7 +498,7 @@
     min-width: 0;
   }
   .mc-pane-head .mc-proj {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     text-transform: uppercase; letter-spacing: 0.05em;
     font-weight: 500; font-size: 15px; cursor: pointer;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -485,7 +534,7 @@
     padding: 16px 22px 12px; border-bottom: 1px solid var(--line);
   }
   #drawer .d-head h2 {
-    font-family: 'Oswald', 'Arial Narrow', sans-serif;
+    font-family: var(--disp-font);
     font-size: 17px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
   }
   #drawer .d-head .d-path {
@@ -621,6 +670,7 @@
   <div id="quota"></div>
   <span id="clock" class="flap" title="board time"></span>
   <button id="mc-btn" title="Mission Control — every live session at once">▦</button>
+  <button id="bell-btn" title="Catch-up — what happened while you were away">🔔<span id="bell-badge" hidden></span></button>
   <button id="gear" title="Settings">⚙</button>
 </header>
 
@@ -995,6 +1045,8 @@ function renderDigest(state) {
 }
 
 function render(state) {
+  if (state.theme && state.theme !== 'board') document.documentElement.dataset.theme = state.theme;
+  else delete document.documentElement.dataset.theme;
   liveIds = new Set((state.liveSessions || []).map((s) => s.sessionId));
   // quota
   const q = state.quota;
@@ -1035,6 +1087,7 @@ function render(state) {
 
   renderGitAttention(state);
   renderPinned(state);
+  if (typeof renderBell === 'function') renderBell(state);
   if (typeof mcSync === 'function') mcSync();
   renderDigest(state);
 
@@ -1244,9 +1297,26 @@ function renderDetail(d, name) {
   }
   const muteBtn = `<div style="margin-bottom:10px"><button class="copy" data-mute="${esc(d.path)}" data-muted="${d.muted ? '1' : ''}" title="Per-project desktop notifications">${
     d.muted ? '🔕 muted — click to unmute' : '🔔 notifying — click to mute'}</button></div>`;
+  const statCompact = (stat) => {
+    const ins = /(\d+) insertion/.exec(stat || '');
+    const del = /(\d+) deletion/.exec(stat || '');
+    return [ins && `+${ins[1]}`, del && `−${del[1]}`].filter(Boolean).join(' ');
+  };
+  const commitRows = (d.commits || []).map((c) => `
+    <li>
+      <span class="s-title" title="${esc(c.stat || '')}">
+        <code class="mono" style="color:var(--faint)">${esc(c.sha)}</code>
+        ${c.claude ? '<span class="badge" title="Co-authored by Claude">✳ claude</span>' : ''}
+        ${esc(c.subject)}
+      </span>
+      ${c.sessionId ? `<button class="copy" data-session="${esc(c.sessionId)}" title="${esc(c.sessionTitle || '')}">session →</button>` : ''}
+      <span class="s-when">${esc(statCompact(c.stat))}</span>
+      <span class="s-when">${relTime(c.ts)}</span>
+    </li>`).join('');
   $('#d-body').innerHTML =
     muteBtn +
     dSection(`Sessions — ${d.sessions.length}`, sessions, 'No sessions recorded.') +
+    dSection(`What changed — last ${(d.commits || []).length} commits`, commitRows ? `<ul class="d-sessions">${commitRows}</ul>` : null, 'No git history here.') +
     dSection('CLAUDE.md', d.claudeMd.length ? dFiles(d.claudeMd, 'name') : null, 'No CLAUDE.md — sessions here start without project instructions.') +
     dSection(`Memory — ${d.memory.length} file${d.memory.length === 1 ? '' : 's'}`, d.memory.length ? dFiles(d.memory, 'name') : null, 'No memory yet.') +
     dSection(`Skills, agents & commands — ${caps.length}`, caps.length ? dFiles(caps, 'name') : null, 'None in .claude/skills, .claude/agents, or .claude/commands.') +
@@ -1625,6 +1695,13 @@ async function openSettings() {
         <input type="checkbox" id="set-usage" ${c.usageApi !== false ? 'checked' : ''}>
       </div>
       <div class="set-row">
+        <span class="set-label">Theme<span class="set-sub">Departures board follows light/dark; Phosphor is always-dark green terminal</span></span>
+        <select id="set-theme">
+          <option value="board" ${c.theme !== 'phosphor' ? 'selected' : ''}>Departures board</option>
+          <option value="phosphor" ${c.theme === 'phosphor' ? 'selected' : ''}>Phosphor</option>
+        </select>
+      </div>
+      <div class="set-row">
         <span class="set-label">Weekly budget<span class="set-sub">estimated $ per trailing 7 days — header meter plus alerts at 75/90/100%; 0 turns it off</span></span>
         <input type="text" id="set-budget" inputmode="numeric" style="width:70px;text-align:right"
           value="${c.weeklyBudget || 0}" placeholder="0">
@@ -1673,6 +1750,8 @@ async function openSettings() {
       saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
     $('#set-usage').addEventListener('change', (e) =>
       saveSetting('/api/config', { usageApi: e.target.checked }, e.target.checked ? 'Usage meters on' : 'Usage meters off — header falls back to the statusline cache'));
+    $('#set-theme').addEventListener('change', (e) =>
+      saveSetting('/api/config', { theme: e.target.value }, `Theme: ${e.target.selectedOptions[0].text}`));
     $('#set-budget').addEventListener('change', (e) => {
       const n = Math.max(0, Math.round(Number(e.target.value) || 0));
       e.target.value = n;
@@ -1853,6 +1932,70 @@ document.addEventListener('click', (e) => {
   if (ds) runSearch(ds.dataset.deepSearch, true);
 });
 
+// ---------- day timeline ----------
+async function openTimeline() {
+  openDrawerShell('Last 24 hours', 'one lane per project · amber ticks = needed you');
+  try {
+    const r = await fetch('/api/stats');
+    if (!r.ok) throw new Error();
+    const s = await r.json();
+    const now = Date.now();
+    const t0 = now - 24 * 3600000;
+    const pct = (t) => Math.max(0, Math.min(100, ((t - t0) / (now - t0)) * 100));
+    const byProject = new Map();
+    for (const row of s.timeline || []) {
+      if (!byProject.has(row.project)) byProject.set(row.project, []);
+      byProject.get(row.project).push(row);
+    }
+    const ticks = (lastState?.events || [])
+      .filter((e) => e.kind === 'needs you' && e.at >= t0);
+    const lanes = [...byProject.entries()].map(([proj, rows]) => {
+      const bars = rows.map((row) => `<span class="tl-bar" data-session="${esc(row.sessionId)}"
+        title="${esc(`${row.title} — ${new Date(row.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}–${new Date(row.end).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`)}"
+        style="left:${pct(row.start).toFixed(1)}%;width:${Math.max(0.8, pct(row.end) - pct(row.start)).toFixed(1)}%"></span>`).join('');
+      const marks = ticks.filter((e) => e.project === proj)
+        .map((e) => `<span class="tl-tick" title="${esc(`needed you — ${relTime(e.at)}`)}" style="left:${pct(e.at).toFixed(1)}%"></span>`).join('');
+      return `<div class="tl-lane"><span class="tl-name disp">${esc(proj)}</span><div class="tl-track">${bars}${marks}</div></div>`;
+    }).join('');
+    const hourMarks = [-24, -18, -12, -6, 0].map((h) =>
+      `<span>${new Date(now + h * 3600000).toLocaleTimeString(undefined, { hour: 'numeric' })}</span>`).join('');
+    $('#d-body').innerHTML = lanes
+      ? `<div style="margin-top:12px">${lanes}</div><div class="hours-labels" style="margin-left:120px">${hourMarks}</div>`
+      : '<div class="d-empty" style="padding:20px 0">No sessions in the last 24 hours.</div>';
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load the timeline.</div>';
+  }
+}
+
+// ---------- catch-up bell ----------
+function seenAt() { return Number(localStorage.getItem('claudeDashSeenAt') || 0); }
+
+function renderBell(state) {
+  const unseen = (state.events || []).filter((e) => e.at > seenAt()).length;
+  const b = $('#bell-badge');
+  b.hidden = !unseen;
+  if (unseen) b.textContent = unseen > 9 ? '9+' : String(unseen);
+}
+
+function openCatchUp() {
+  openDrawerShell('Catch-up', 'notification history since the server started');
+  const events = (lastState && lastState.events) || [];
+  const since = seenAt();
+  const rows = events.map((e) => `
+    <li ${e.at > since ? 'style="border-left:2px solid var(--warn);padding-left:8px"' : ''}>
+      <span class="flap disp st" style="flex:none">${esc(e.kind)}</span>
+      <span class="s-title">${esc(e.project)} — ${esc(e.body)}</span>
+      <span class="s-when">${relTime(e.at)}</span>
+    </li>`).join('');
+  $('#d-body').innerHTML = rows
+    ? `<ul class="d-sessions" style="margin-top:12px">${rows}</ul>`
+    : '<div class="d-empty" style="padding:20px 0">Nothing yet — waiting, stuck, and budget events will show up here.</div>';
+  localStorage.setItem('claudeDashSeenAt', String(Date.now()));
+  renderBell(lastState || {});
+}
+
+$('#bell-btn').addEventListener('click', openCatchUp);
+
 // ---------- weekly report ----------
 let weekReport = null;
 async function openWeekReport() {
@@ -1941,6 +2084,8 @@ function paletteItems(q) {
   items.push({ k: '▦', label: 'Mission Control', hint: 'every live session at once', run: openMissionControl });
   items.push({ k: '▲', label: 'Stats', hint: 'heatmap · models · hours', run: openStats });
   items.push({ k: '☰', label: 'Your week with Claude', hint: '7-day report · export', run: openWeekReport });
+  items.push({ k: '━', label: 'Day timeline', hint: 'last 24h, lane per project', run: openTimeline });
+  items.push({ k: '🔔', label: 'Catch-up', hint: 'notification history', run: openCatchUp });
   for (const l of st.liveSessions || []) {
     items.push({ k: '●', label: `Watch live: ${l.projectName} — ${l.title || ''}`, hint: l.status, run: () => openTranscript(l.sessionId) });
   }

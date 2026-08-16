@@ -141,6 +141,8 @@ Edit `ignore.json` — an array of absolute path prefixes. A project is hidden i
 | `CLAUDE_DASH_DEV` | unset | `1` = re-read index.html on every request |
 | `CLAUDE_DASH_NOTIFY` | unset | `0` = disable macOS notifications |
 | `CLAUDE_DASH_HOST` | `127.0.0.1` | Bind address — see below before changing |
+| `CLAUDE_DASH_DEMO` | unset | `1` = serve believable fake data (screenshots, trying it without Claude history) |
+| `CLAUDE_DASH_CONFIG_DIR` | repo dir | Where config.json/names.json/ignore.json live (auto-falls back to `~/.config/claude-dashboard`) |
 
 The server binds to `127.0.0.1` only by default.
 

@@ -14,6 +14,9 @@ const { sessionTitle } = require('./lib/transcripts');
 const { friendlyName } = require('./lib/names');
 const cfg = require('./lib/config');
 const { isProjectMuted } = require('./lib/notify');
+const { recentCommits, linkCommitsToSessions } = require('./lib/gitlog');
+const { demoState, demoStats, demoSession } = require('./lib/demo');
+const DEMO = process.env.CLAUDE_DASH_DEMO === '1';
 
 const PORT = Number(process.env.CLAUDE_DASH_PORT) || 4517;
 // Default loopback-only. For remote access prefer `tailscale serve` (keeps
@@ -75,7 +78,7 @@ const server = http.createServer((req, res) => {
   if (url === '/' || url === '/index.html') {
     res.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
-      'Content-Security-Policy': "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'self'",
+      'Content-Security-Policy': "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: 'self'; connect-src 'self'",
     });
     res.end(indexHtml());
     return;
@@ -94,6 +97,33 @@ const server = http.createServer((req, res) => {
       res.end(buf);
     });
     return;
+  }
+
+  // Demo mode: canned data for every API route, static assets as normal.
+  if (DEMO && url.startsWith('/api/')) {
+    if (url === '/api/state') return json(res, 200, demoState());
+    if (url === '/api/health') return json(res, 200, { ok: true, demo: true, version: VERSION });
+    if (url === '/api/stats') return json(res, 200, demoStats());
+    if (url === '/api/session') return json(res, 200, demoSession());
+    if (url === '/api/search') return json(res, 200, { q: '', prompts: [], titles: [], transcripts: null });
+    if (url === '/api/project') {
+      return json(res, 200, {
+        path: '/demo/acme-storefront', sessions: [], commits: [], muted: false,
+        claudeMd: [], memory: [], skills: [], agents: [], commands: [], settings: {},
+      });
+    }
+    if (url === '/api/config' && req.method === 'GET') {
+      return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], version: VERSION, errors: [] });
+    }
+    if (url === '/api/events') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+      const send = () => res.write(`data: ${JSON.stringify(demoState())}\n\n`);
+      send();
+      const t = setInterval(send, 5000);
+      req.on('close', () => clearInterval(t));
+      return;
+    }
+    return json(res, 200, { ok: false, error: 'not available in demo mode' });
   }
 
   // Bundled font files only — no traversal, extension whitelisted.
@@ -176,9 +206,10 @@ const server = http.createServer((req, res) => {
       res.end('{"error":"unknown project"}');
       return;
     }
-    projectDetail(known)
-      .then((detail) => {
+    Promise.all([projectDetail(known), recentCommits(known)])
+      .then(([detail, commits]) => {
         detail.sessions = collector.allSessions(known);
+        detail.commits = linkCommitsToSessions(commits, detail.sessions);
         detail.muted = isProjectMuted(known, cfg.readConfig().mutedProjects);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(detail));
@@ -380,9 +411,9 @@ const pingTimer = setInterval(() => {
 }, 25_000);
 pingTimer.unref();
 
-collector.start().then(() => {
+(DEMO ? Promise.resolve() : collector.start()).then(() => {
   server.listen(PORT, HOST, () => {
-    console.log(`claude-dashboard listening on http://${HOST}:${PORT}`);
+    console.log(`claude-dashboard listening on http://${HOST}:${PORT}${DEMO ? ' (demo mode)' : ''}`);
   });
 });
 
