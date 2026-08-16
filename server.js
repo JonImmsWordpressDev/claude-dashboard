@@ -9,7 +9,8 @@ const { Collector } = require('./lib/collector');
 const { openSession, openNewSession } = require('./lib/opener');
 const { projectDetail } = require('./lib/detail');
 const { sessionTranscript } = require('./lib/transcript-view');
-const { searchHistory, searchTitles, searchTranscripts } = require('./lib/search');
+const { searchHistory, searchTitles, searchTranscripts, parseSearchQuery } = require('./lib/search');
+const { readChats, saveChats, searchChats } = require('./lib/chats');
 const { sessionTitle } = require('./lib/transcripts');
 const { friendlyName } = require('./lib/names');
 const cfg = require('./lib/config');
@@ -288,6 +289,38 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Claude.ai chats: imported once from the official export, then read-only.
+  if (url === '/api/chats-import' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(res, 403, { ok: false, error: 'forbidden' });
+    let body = '';
+    req.on('data', (c) => {
+      body += c;
+      if (body.length > 100 * 1024 * 1024) req.destroy(); // exports are ~tens of MB
+    });
+    req.on('end', () => {
+      try {
+        const raw = JSON.parse(body);
+        if (!Array.isArray(raw)) return json(res, 400, { ok: false, error: 'expected the conversations.json array' });
+        const count = saveChats(raw);
+        json(res, 200, { ok: true, count });
+      } catch (e) {
+        json(res, 400, { ok: false, error: String(e.message).slice(0, 200) });
+      }
+    });
+    return;
+  }
+
+  if (url === '/api/chats') {
+    return json(res, 200, readChats().map(({ messages, ...meta }) => meta));
+  }
+
+  if (url === '/api/chat') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id') || '';
+    const chat = readChats().find((c) => c.id === id);
+    if (!chat) return json(res, 404, { error: 'unknown chat' });
+    return json(res, 200, chat);
+  }
+
   if (url === '/api/session') {
     const params = new URL(req.url, 'http://localhost').searchParams;
     const id = params.get('id') || '';
@@ -327,8 +360,14 @@ const server = http.createServer((req, res) => {
         for (const r of prompts) r.projectName = friendlyName(r.project);
         for (const r of titles) r.projectName = friendlyName(r.project);
         if (transcripts) for (const r of transcripts.matches) r.projectName = friendlyName(r.project);
+        let chats = null;
+        if (deep) {
+          const { text, since } = parseSearchQuery(q);
+          const pool = since ? readChats().filter((c) => c.updatedAt >= since) : readChats();
+          chats = searchChats(text, pool);
+        }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ q, prompts, titles, transcripts }));
+        res.end(JSON.stringify({ q, prompts, titles, transcripts, chats }));
       })
       .catch((e) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -411,13 +450,52 @@ const pingTimer = setInterval(() => {
 }, 25_000);
 pingTimer.unref();
 
+// Set by bin/claude-dashboard.js (the npx / global-install path). Services
+// run this file directly and never auto-open a browser.
+const OPEN = process.env.CLAUDE_DASH_OPEN === '1';
+const DASH_URL = `http://127.0.0.1:${PORT}`;
+
+function openBrowser(url) {
+  const { execFile } = require('child_process');
+  if (process.platform === 'darwin') execFile('open', [url], () => {});
+  else if (process.platform === 'win32') execFile('cmd', ['/c', 'start', '', url], () => {});
+  else execFile('xdg-open', [url], () => {});
+}
+
 (DEMO ? Promise.resolve() : collector.start()).then(() => {
   server.listen(PORT, HOST, () => {
-    console.log(`claude-dashboard listening on http://${HOST}:${PORT}${DEMO ? ' (demo mode)' : ''}`);
+    console.log(`claude-dashboard listening on ${DASH_URL}${DEMO ? ' (demo mode)' : ''}`);
+    if (OPEN) {
+      console.log('opening it in your browser… (tip: the browser can install it as an app — Safari: File → Add to Dock; Chrome/Edge: the install icon in the address bar)');
+      openBrowser(DASH_URL);
+    }
   });
 });
 
 server.on('error', (err) => {
+  // Someone ran npx while the dashboard is already up: just take them there.
+  if (err.code === 'EADDRINUSE') {
+    http.get(`${DASH_URL}/api/health`, (r) => {
+      let body = '';
+      r.on('data', (c) => (body += c));
+      r.on('end', () => {
+        let ok = false;
+        try { ok = JSON.parse(body).ok === true; } catch { /* not ours */ }
+        if (ok) {
+          console.log(`claude-dashboard is already running at ${DASH_URL}`);
+          if (OPEN) openBrowser(DASH_URL);
+          process.exit(0);
+        } else {
+          console.error(`port ${PORT} is in use by something else — set CLAUDE_DASH_PORT to pick another`);
+          process.exit(1);
+        }
+      });
+    }).on('error', () => {
+      console.error(`port ${PORT} is in use by something else — set CLAUDE_DASH_PORT to pick another`);
+      process.exit(1);
+    });
+    return;
+  }
   console.error(`server error: ${err.message}`);
   process.exit(1);
 });

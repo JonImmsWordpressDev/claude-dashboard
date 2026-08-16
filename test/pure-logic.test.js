@@ -456,3 +456,48 @@ test('linkCommitsToSessions matches a commit inside a session activity window', 
   assert.equal(linked[0].sessionTitle, 'Build the thing');
   assert.equal(linked[1].sessionId, undefined);
 });
+
+// --- Claude.ai chats import ---
+const { normalizeChats, searchChats } = require('../lib/chats');
+
+test('normalizeChats slims conversations and extracts text from content blocks', () => {
+  const raw = [{
+    uuid: 'c1', name: 'Trip planning', summary: '',
+    created_at: '2026-08-01T10:00:00Z', updated_at: '2026-08-02T09:00:00Z',
+    chat_messages: [
+      { sender: 'human', text: 'Plan a trip to Lisbon', content: [], created_at: '2026-08-01T10:00:00Z' },
+      { sender: 'assistant', text: '', content: [{ type: 'text', text: 'Three days is enough for...' }], created_at: '2026-08-01T10:00:30Z' },
+    ],
+  }, {
+    uuid: 'c2', name: '', chat_messages: [],
+    created_at: '2026-08-01T10:00:00Z', updated_at: '2026-08-01T10:00:00Z',
+  }];
+  const chats = normalizeChats(raw);
+  assert.equal(chats.length, 1); // empty conversation dropped
+  assert.equal(chats[0].id, 'c1');
+  assert.equal(chats[0].name, 'Trip planning');
+  assert.equal(chats[0].count, 2);
+  assert.equal(chats[0].messages[0].who, 'you');
+  assert.equal(chats[0].messages[1].who, 'claude');
+  assert.equal(chats[0].messages[1].text, 'Three days is enough for...');
+});
+
+test('normalizeChats falls back to the first message for unnamed chats', () => {
+  const raw = [{
+    uuid: 'c3', name: '', created_at: '2026-08-01T10:00:00Z', updated_at: '2026-08-01T10:00:00Z',
+    chat_messages: [{ sender: 'human', text: 'What is a CIDR block and why does it matter', content: [], created_at: '2026-08-01T10:00:00Z' }],
+  }];
+  assert.ok(normalizeChats(raw)[0].name.startsWith('What is a CIDR block'));
+});
+
+test('searchChats matches names and message text with snippets', () => {
+  const chats = [{
+    id: 'c1', name: 'Trip planning', updatedAt: 100,
+    messages: [{ who: 'claude', text: 'Book the Alfama walking tour early', ts: 90 }],
+  }];
+  const byName = searchChats('trip', chats);
+  assert.equal(byName[0].chatId, 'c1');
+  const byText = searchChats('alfama', chats);
+  assert.ok(byText[0].snippet.toLowerCase().includes('alfama'));
+  assert.equal(searchChats('nothing-here', chats).length, 0);
+});

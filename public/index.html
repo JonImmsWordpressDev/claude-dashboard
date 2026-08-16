@@ -1635,10 +1635,17 @@ async function runSearch(q, deep) {
         <span class="s-when">${esc(p.projectName)}</span>
         <span class="s-when">${relTime(p.timestamp)}</span>
       </li>`).join('');
+    const chatRows = (d.chats || []).map((m) => `
+      <li>
+        <span class="s-title" data-chat="${esc(m.chatId)}" data-hl="${esc(hl)}" title="Click to open at this match">${esc(m.snippet)}</span>
+        <span class="s-when">${esc(m.name.slice(0, 40))}</span>
+        <span class="s-when">${m.ts ? relTime(m.ts) : ''}</span>
+      </li>`).join('');
     $('#d-body').innerHTML =
       dSection(`Session titles — ${d.titles.length}`, titleRows ? `<ul class="d-sessions">${titleRows}</ul>` : null, 'No title matches.') +
       dSection(`Prompts — ${d.prompts.length}`, promptRows ? `<ul class="d-sessions">${promptRows}</ul>` : null, 'No prompt matches.') +
-      deepSection;
+      deepSection +
+      (d.chats ? dSection(`Claude.ai chats — ${d.chats.length}`, chatRows ? `<ul class="d-sessions">${chatRows}</ul>` : null, 'No chat matches.') : '');
   } catch {
     $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Search failed.</div>';
   }
@@ -1707,6 +1714,10 @@ async function openSettings() {
           value="${c.weeklyBudget || 0}" placeholder="0">
       </div>
       <div class="set-row">
+        <span class="set-label">Claude.ai chats<span class="set-sub">import conversations.json from your claude.ai export (Settings → Privacy → Export data)</span></span>
+        <input type="file" id="set-chats" accept=".json,application/json" style="max-width:210px;font-size:11px;color:var(--muted)">
+      </div>
+      <div class="set-row">
         <span class="set-label">Version ${esc(c.version || '?')}<span class="set-sub">checks GitHub only when you click — never automatically</span></span>
         <span id="set-update-result" style="color:var(--faint);font-size:12px"></span>
         <button class="copy" id="set-update">check for updates</button>
@@ -1750,6 +1761,19 @@ async function openSettings() {
       saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
     $('#set-usage').addEventListener('change', (e) =>
       saveSetting('/api/config', { usageApi: e.target.checked }, e.target.checked ? 'Usage meters on' : 'Usage meters off — header falls back to the statusline cache'));
+    $('#set-chats').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      toast('Importing chats…');
+      try {
+        const body = await file.text();
+        const r = await fetch('/api/chats-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        const out = await r.json();
+        toast(out.ok ? `Imported ${out.count} chats — find them in ⌘K` : `Import failed: ${out.error}`);
+      } catch {
+        toast("Couldn't import that file");
+      }
+    });
     $('#set-theme').addEventListener('change', (e) =>
       saveSetting('/api/config', { theme: e.target.value }, `Theme: ${e.target.selectedOptions[0].text}`));
     $('#set-budget').addEventListener('change', (e) => {
@@ -1932,6 +1956,65 @@ document.addEventListener('click', (e) => {
   if (ds) runSearch(ds.dataset.deepSearch, true);
 });
 
+// ---------- claude.ai chats (imported) ----------
+async function openChats() {
+  openDrawerShell('Claude.ai chats', '');
+  try {
+    const r = await fetch('/api/chats');
+    if (!r.ok) throw new Error();
+    const chats = await r.json();
+    $('#d-path').textContent = chats.length
+      ? `${chats.length} imported chats — update anytime from Settings`
+      : '';
+    const rows = chats.map((c) => `
+      <li>
+        <span class="s-title" data-chat="${esc(c.id)}" title="Click to read">${esc(c.name)}</span>
+        <span class="s-when">${c.count} msgs</span>
+        <span class="s-when">${relTime(c.updatedAt)}</span>
+      </li>`).join('');
+    $('#d-body').innerHTML = rows
+      ? `<ul class="d-sessions" style="margin-top:12px">${rows}</ul>`
+      : `<div class="d-empty" style="padding:20px 0">No chats imported yet. Export from claude.ai
+         (Settings → Privacy → Export data), then import <code class="mono">conversations.json</code>
+         from the ⚙ settings panel here.</div>`;
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load chats.</div>';
+  }
+}
+
+async function openChat(id, highlight) {
+  openDrawerShell('Chat', '');
+  try {
+    const r = await fetch(`/api/chat?id=${encodeURIComponent(id)}`);
+    if (!r.ok) throw new Error();
+    const c = await r.json();
+    $('#d-title').textContent = c.name;
+    $('#d-path').textContent = `claude.ai · ${c.count} messages · ${relTime(c.updatedAt)}`;
+    $('#d-actions').innerHTML = '<button class="copy" data-chats-back>← all chats</button>';
+    const st = { lastDay: '' };
+    $('#d-body').innerHTML = transcriptHtml(
+      c.messages.map((m) => ({ kind: m.who === 'you' ? 'user' : 'assistant', ts: m.ts, text: m.text })), st);
+    if (highlight) {
+      const needle = highlight.toLowerCase();
+      const hit = [...$('#d-body').querySelectorAll('.t-turn')]
+        .find((el) => el.textContent.toLowerCase().includes(needle));
+      if (hit) {
+        hit.scrollIntoView({ block: 'center' });
+        hit.classList.add('hl-flash');
+        setTimeout(() => hit.classList.remove('hl-flash'), 2400);
+      }
+    }
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load this chat.</div>';
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const ch = e.target.closest('[data-chat]');
+  if (ch) { openChat(ch.dataset.chat, ch.dataset.hl); return; }
+  if (e.target.closest('[data-chats-back]')) openChats();
+});
+
 // ---------- day timeline ----------
 async function openTimeline() {
   openDrawerShell('Last 24 hours', 'one lane per project · amber ticks = needed you');
@@ -2085,6 +2168,7 @@ function paletteItems(q) {
   items.push({ k: '▲', label: 'Stats', hint: 'heatmap · models · hours', run: openStats });
   items.push({ k: '☰', label: 'Your week with Claude', hint: '7-day report · export', run: openWeekReport });
   items.push({ k: '━', label: 'Day timeline', hint: 'last 24h, lane per project', run: openTimeline });
+  items.push({ k: '💬', label: 'Claude.ai chats', hint: 'imported from your export', run: openChats });
   items.push({ k: '🔔', label: 'Catch-up', hint: 'notification history', run: openCatchUp });
   for (const l of st.liveSessions || []) {
     items.push({ k: '●', label: `Watch live: ${l.projectName} — ${l.title || ''}`, hint: l.status, run: () => openTranscript(l.sessionId) });

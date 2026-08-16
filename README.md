@@ -14,7 +14,7 @@ Everything is read from local files under `~/.claude`, and it never writes to Cl
 npx claude-mission-control
 ```
 
-That downloads nothing permanent, starts the server, and prints the URL. Like it? Install it for real below.
+That downloads nothing permanent, starts the server, and opens the dashboard in your browser (add `--no-open` to skip that). Run it again while it's already up and it just opens the tab. Like it? Install it for real below.
 
 Homebrew works too:
 
@@ -87,6 +87,7 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **New session** — the `⊕` button on a project card opens a fresh terminal window in that project running `claude`.
 - **Cost trend** — the small bar chart in the header is estimated cost per week for the last 8 weeks (hover for numbers). Costs include subagent tokens.
 - **Models everywhere** — every session shows which model ran it (live cards, digest, session lists), and the stats view breaks down usage per model and per project.
+- **Claude.ai chats** — import the official export from claude.ai (Settings → Privacy → Export data, then feed `conversations.json` to ⚙ settings here) and your chats become browsable (`⌘K` → Claude.ai chats) and full-text searchable next to your coding sessions. Stored slimmed in your local config dir, gitignored, never uploaded anywhere.
 
 ![Stats view: activity heatmap, busiest hours, weekly rhythm, 90-day spend, and per-model cost breakdowns](docs/screenshots/stats.png)
 - **Project details** — click any project's name for a slide-over with its full session list, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools). Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
