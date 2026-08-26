@@ -1,6 +1,6 @@
 {
   "name": "claude-mission-control",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Local dashboard for Claude Code: live sessions, transcripts, costs, git status — all your projects in one place.",
   "main": "server.js",
   "bin": {

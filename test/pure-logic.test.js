@@ -501,3 +501,92 @@ test('searchChats matches names and message text with snippets', () => {
   assert.ok(byText[0].snippet.toLowerCase().includes('alfama'));
   assert.equal(searchChats('nothing-here', chats).length, 0);
 });
+
+// --- Install-kind detection (self-update) ---
+const { detectInstallKind, updatePlan, npmCliCandidates } = require('../lib/update');
+
+test('detectInstallKind: git checkout wins when a .git dir is present', () => {
+  assert.equal(detectInstallKind('/Users/alex/AI Projects/claude-dashboard', true), 'git');
+});
+
+test('detectInstallKind: global npm install', () => {
+  assert.equal(
+    detectInstallKind('/usr/local/lib/node_modules/claude-mission-control', false),
+    'npm'
+  );
+});
+
+test('detectInstallKind: npx cache is npx even though it sits in node_modules', () => {
+  assert.equal(
+    detectInstallKind('/Users/alex/.npm/_npx/abc123/node_modules/claude-mission-control', false),
+    'npx'
+  );
+});
+
+test('detectInstallKind: brew Cellar is brew even with node_modules and .git absent checks', () => {
+  assert.equal(
+    detectInstallKind('/opt/homebrew/Cellar/claude-mission-control/1.7.0/libexec/lib/node_modules/claude-mission-control', false),
+    'brew'
+  );
+});
+
+test('detectInstallKind: brew/npx path signals beat a stray .git dir', () => {
+  assert.equal(
+    detectInstallKind('/Users/alex/.npm/_npx/abc123/node_modules/claude-mission-control', true),
+    'npx'
+  );
+});
+
+test('detectInstallKind: Windows npx cache path', () => {
+  assert.equal(
+    detectInstallKind('C:\\Users\\alex\\AppData\\Local\\npm-cache\\_npx\\abc\\node_modules\\claude-mission-control', false),
+    'npx'
+  );
+});
+
+test('detectInstallKind: pnpm/yarn/volta/bun globals are not npm (manual instead)', () => {
+  assert.equal(detectInstallKind('/Users/alex/Library/pnpm/global/5/node_modules/claude-mission-control', false), 'unknown');
+  assert.equal(detectInstallKind('/Users/alex/.config/yarn/global/node_modules/claude-mission-control', false), 'unknown');
+  assert.equal(detectInstallKind('/Users/alex/.volta/tools/image/packages/claude-mission-control/lib/node_modules/claude-mission-control', false), 'unknown');
+  assert.equal(detectInstallKind('/Users/alex/.bun/install/global/node_modules/claude-mission-control', false), 'unknown');
+});
+
+test('detectInstallKind: plain directory with no signals is unknown', () => {
+  assert.equal(detectInstallKind('/Users/alex/Downloads/claude-dashboard', false), 'unknown');
+});
+
+
+test('updatePlan: git installs run git pull --ff-only in the app dir', () => {
+  const plan = updatePlan('git');
+  assert.equal(plan.type, 'run');
+  assert.equal(plan.cmd, 'git');
+  assert.deepEqual(plan.args, ['pull', '--ff-only']);
+});
+
+test('updatePlan: npm installs reinstall the published package by name', () => {
+  const plan = updatePlan('npm', 'claude-mission-control');
+  assert.equal(plan.type, 'run');
+  assert.equal(plan.cmd, 'npm');
+  assert.deepEqual(plan.args, ['install', '-g', 'claude-mission-control@latest']);
+});
+
+test('updatePlan: brew and npx are manual with a command to show', () => {
+  const brew = updatePlan('brew', 'claude-mission-control');
+  assert.equal(brew.type, 'manual');
+  assert.ok(brew.message.includes('brew upgrade claude-mission-control'));
+  const npx = updatePlan('npx', 'claude-mission-control');
+  assert.equal(npx.type, 'manual');
+  assert.ok(npx.message.toLowerCase().includes('npx'));
+});
+
+test('updatePlan: unknown installs get manual instructions, never a command', () => {
+  const plan = updatePlan('unknown');
+  assert.equal(plan.type, 'manual');
+});
+
+test('npmCliCandidates covers the unix prefix and Windows layouts', () => {
+  const unix = npmCliCandidates('/opt/homebrew/bin');
+  assert.ok(unix.some((p) => p.replace(/\\/g, '/').endsWith('/opt/homebrew/lib/node_modules/npm/bin/npm-cli.js')));
+  const win = npmCliCandidates('C:/Program Files/nodejs');
+  assert.ok(win.some((p) => p.replace(/\\/g, '/').endsWith('C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js')));
+});

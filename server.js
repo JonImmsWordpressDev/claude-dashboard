@@ -17,6 +17,7 @@ const cfg = require('./lib/config');
 const { isProjectMuted } = require('./lib/notify');
 const { recentCommits, linkCommitsToSessions } = require('./lib/gitlog');
 const { demoState, demoStats, demoSession } = require('./lib/demo');
+const { runSelfUpdate } = require('./lib/update');
 const DEMO = process.env.CLAUDE_DASH_DEMO === '1';
 
 const PORT = Number(process.env.CLAUDE_DASH_PORT) || 4517;
@@ -114,7 +115,7 @@ const server = http.createServer((req, res) => {
       });
     }
     if (url === '/api/config' && req.method === 'GET') {
-      return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], version: VERSION, errors: [] });
+      return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], themes: cfg.THEMES, version: VERSION, errors: [] });
     }
     if (url === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
@@ -179,6 +180,27 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Manual only, no client input: updates this install in place (git pull or
+  // npm -g reinstall, decided server-side from our own location). When the
+  // process is service-managed, it exits after replying and launchd/systemd
+  // relaunch it on the new code.
+  if (url === '/api/update' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(res, 403, { ok: false, error: 'forbidden' });
+    runSelfUpdate(__dirname).then((result) => {
+      json(res, result.ok || result.manual ? 200 : 500, result);
+      if (result.ok && result.willRestart) {
+        setTimeout(() => {
+          console.log(`self-update to ${result.version} applied — exiting so the service manager relaunches`);
+          // launchd's KeepAlive=true relaunches on any exit, so macOS exits
+          // clean. Linux exits 1 because units deployed before this feature
+          // have Restart=on-failure and never get the updated unit file.
+          process.exit(process.platform === 'darwin' ? 0 : 1);
+        }, 500);
+      }
+    });
+    return;
+  }
+
   if (url === '/api/events') {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -230,6 +252,7 @@ const server = http.createServer((req, res) => {
   if (url === '/api/config' && req.method === 'GET') {
     json(res, 200, {
       ...cfg.readConfig(),
+      themes: cfg.THEMES,
       version: VERSION,
       errors: collector.state.errors || [],
       terminals: cfg.detectTerminals(),

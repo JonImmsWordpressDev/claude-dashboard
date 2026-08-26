@@ -14,5 +14,6 @@
   <key>StandardErrorPath</key><string>__HOME__/Library/Logs/claude-dashboard.log</string>
   <key>EnvironmentVariables</key><dict>
     <key>CLAUDE_DASH_PORT</key><string>4517</string>
+    <key>CLAUDE_DASH_SERVICE</key><string>1</string>
   </dict>
 </dict></plist>

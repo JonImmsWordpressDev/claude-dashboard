@@ -22,7 +22,7 @@ There is no build, lint, or bundling step. Logs for the installed service: `~/Li
 ## Hard rules
 
 - **Never write to anything under `~/.claude`.** All Claude data is read-only.
-- **No network calls** except two: the Keychain-authed Anthropic OAuth usage fetch (`lib/usage.js`, toggleable, in-memory token only — never written or logged) and the user-initiated GitHub update check in `server.js`. Anything else that phones home will be rejected.
+- **No network calls** except three, all user-initiated or toggleable: the Keychain-authed Anthropic OAuth usage fetch (`lib/usage.js`, toggleable, in-memory token only — never written or logged), the GitHub update check in `server.js`, and the self-update in `lib/update.js` (runs `git pull` / `npm install -g` — fixed commands, never client input). Anything else that phones home will be rejected.
 - **The `/api/open` family executes shell commands.** Any change there (or in `lib/opener.js`) must validate inputs against collector-known state — session IDs, project paths — never trust client-supplied paths. The existing pattern: look the request up in `collector.projectPaths()` / `collector.findSession()` and use the server-side value.
 - Server binds `127.0.0.1` only by default; POST endpoints enforce same-origin.
 

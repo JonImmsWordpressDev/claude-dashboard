@@ -113,6 +113,8 @@ The ⚙ gear in the header opens settings — no JSON editing required:
 - **Notifications** on/off (writes `config.json`); per-project mute lives on each project's slide-over
 - **Terminal** for open/new-session buttons: Ghostty, iTerm2, or Terminal.app, auto-detected (`config.json`)
 - **Rename any project** (writes `names.json`) or **hide it** and its whole subtree (writes `ignore.json`), with an unhide list below
+- **Theme**: Departures board (follows system light/dark), Phosphor, Amber CRT, Midnight, or Newsprint (`config.json`)
+- **Updates**: "check for updates" asks GitHub only when you click; when a new release is out, **update now** pulls it in place (git or npm installs) and service installs restart themselves on the new version
 
 Everything saves instantly; the underlying files stay hand-editable. Keyboard: `⌘K` for the palette, `/` for search, `Esc` closes anything.
 

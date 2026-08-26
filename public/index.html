@@ -101,6 +101,79 @@
     --flap-split: rgba(0, 0, 0, 0.5);
     --amber-ink: #050a06;
   }
+  /* Amber CRT: the VT220's other phosphor. Real amber terminals signaled with
+     two intensities, so body text is dim amber, "working" is standard amber,
+     and "needs you" is the white-hot bright intensity. Red still means broken. */
+  :root[data-theme="amber"] {
+    --disp-font: 'JetBrains Mono', ui-monospace, monospace;
+    --bg: #0a0602;
+    --surface: #140d04;
+    --surface2: #1f1508;
+    --ink: #d99a3f;
+    --muted: #a1712a;
+    --faint: #6e4c1a;
+    --line: #241708;
+    --accent: #ffb020;
+    --warn: #ffe6c0;
+    --bad: #ff4b33;
+    --chip-bg: #1f1508;
+    --warn-bg: rgba(255, 230, 192, 0.10);
+    --accent-bg: rgba(255, 176, 32, 0.10);
+    --glow: 0 0 9px;
+    --flap: #140d04;
+    --flap-hi: #1b1206;
+    --flap-split: rgba(0, 0, 0, 0.5);
+    --amber-ink: #0a0602;
+  }
+  /* Midnight: the board on the night shift. Deep blue-black enamel, frost
+     ink, ice-cyan boarding lamp; a warm lantern amber is the one warm thing
+     on screen, so "needs you" pops hardest. */
+  :root[data-theme="midnight"] {
+    --disp-font: 'Oswald', 'Arial Narrow', sans-serif;
+    --bg: #0a1220;
+    --surface: #111a2c;
+    --surface2: #1a2740;
+    --ink: #d6e2f0;
+    --muted: #8299b5;
+    --faint: #4d6076;
+    --line: #1c2a42;
+    --accent: #5bc8d8;
+    --warn: #ffc466;
+    --bad: #ff6b5e;
+    --chip-bg: #1a2740;
+    --warn-bg: rgba(255, 196, 102, 0.12);
+    --accent-bg: rgba(91, 200, 216, 0.10);
+    --glow: 0 0 6px;
+    --flap: #111a2c;
+    --flap-hi: #16223a;
+    --flap-split: rgba(0, 0, 0, 0.45);
+    --amber-ink: #0a1220;
+  }
+  /* Newsprint: always-light broadsheet. Grey newsprint stock, serif section
+     headers, printed-green ink for "boarding", and one red: stop-press red
+     for "needs you". Errors are oxblood — a different red, darker. No glow;
+     paper doesn't. */
+  :root[data-theme="newsprint"] {
+    --disp-font: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    --bg: #eeebe1;
+    --surface: #e6e2d6;
+    --surface2: #dbd6c7;
+    --ink: #1c1914;
+    --muted: #5f594c;
+    --faint: #928a79;
+    --line: #c9c3b2;
+    --accent: #23704b;
+    --warn: #c22c1c;
+    --bad: #6b1005;
+    --chip-bg: #dbd6c7;
+    --warn-bg: rgba(194, 44, 28, 0.08);
+    --accent-bg: rgba(35, 112, 75, 0.08);
+    --glow: none;
+    --flap: #e6e2d6;
+    --flap-hi: #ece8dd;
+    --flap-split: rgba(0, 0, 0, 0.08);
+    --amber-ink: #eeebe1;
+  }
   * { box-sizing: border-box; margin: 0; }
   html { -webkit-text-size-adjust: 100%; }
   body {
@@ -1652,6 +1725,54 @@ async function runSearch(q, deep) {
 }
 
 // ---------- settings ----------
+// One-click self-update. The server decides what to run from its own install
+// location; we just kick it off and wait for the new version to come back up.
+async function applyUpdate(out, currentVersion) {
+  out.textContent = 'updating…';
+  let startPid = null;
+  try {
+    startPid = (await (await fetch('/api/health', { cache: 'no-store' })).json()).pid || null;
+  } catch {}
+  let r;
+  try {
+    r = await (await fetch('/api/update', { method: 'POST' })).json();
+  } catch {
+    out.textContent = "couldn't reach the server";
+    return;
+  }
+  if (r.manual) { out.textContent = r.manual; return; }
+  if (!r.ok) { out.textContent = `update failed: ${r.error || 'unknown error'}`; return; }
+  if (r.unchanged) {
+    out.textContent = r.kind === 'npm'
+      ? 'nothing newer on npm yet — the release may still be publishing, try again in a few minutes'
+      : 'nothing new arrived — try again later';
+    return;
+  }
+  if (!r.willRestart) {
+    out.textContent = `updated to ${r.version || 'the new version'} — restart the dashboard to finish`;
+    return;
+  }
+  out.textContent = 'updated — restarting…';
+  // The old process exits moments after replying; poll health until a
+  // different server answers — new version, new pid, or back up after a
+  // visible down-gap (pid catches a fast relaunch the version can't).
+  const t0 = Date.now();
+  let sawDown = false;
+  (async function poll() {
+    try {
+      const h = await (await fetch('/api/health', { cache: 'no-store' })).json();
+      if (h.version !== currentVersion || (startPid && h.pid && h.pid !== startPid) || sawDown) {
+        location.reload();
+        return;
+      }
+    } catch {
+      sawDown = true;
+    }
+    if (Date.now() - t0 < 60000) setTimeout(poll, 1500);
+    else out.textContent = "server didn't come back — check the logs";
+  })();
+}
+
 async function saveSetting(endpoint, payload, note) {
   try {
     const r = await fetch(endpoint, {
@@ -1680,6 +1801,7 @@ async function openSettings() {
       }
       return '';
     };
+    const themeId = (c.themes || []).some((t) => t.id === c.theme) ? c.theme : 'board';
     const general = `
       <div class="set-row">
         <span class="set-label">Notifications<span class="set-sub">waiting-for-input and stuck-session alerts</span></span>
@@ -1702,10 +1824,9 @@ async function openSettings() {
         <input type="checkbox" id="set-usage" ${c.usageApi !== false ? 'checked' : ''}>
       </div>
       <div class="set-row">
-        <span class="set-label">Theme<span class="set-sub">Departures board follows light/dark; Phosphor is always-dark green terminal</span></span>
+        <span class="set-label">Theme<span class="set-sub">Departures board follows light/dark; Newsprint is always-light; the rest are always-dark</span></span>
         <select id="set-theme">
-          <option value="board" ${c.theme !== 'phosphor' ? 'selected' : ''}>Departures board</option>
-          <option value="phosphor" ${c.theme === 'phosphor' ? 'selected' : ''}>Phosphor</option>
+          ${(c.themes || []).map((t) => `<option value="${t.id}" ${t.id === themeId ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
         </select>
       </div>
       <div class="set-row">
@@ -1752,7 +1873,13 @@ async function openSettings() {
         const r = await (await fetch('/api/update-check')).json();
         if (r.error) out.textContent = `couldn't check: ${r.error}`;
         else if (r.upToDate) out.textContent = `up to date (${r.current})`;
-        else out.innerHTML = `${esc(r.latest)} available — <a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--accent)">release notes</a>, then git pull`;
+        else {
+          out.innerHTML = `${esc(r.latest)} available — <a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--accent)">release notes</a> · <a href="#" id="set-update-now" style="color:var(--warn)">update now</a>`;
+          $('#set-update-now').addEventListener('click', (ev) => {
+            ev.preventDefault();
+            applyUpdate(out, r.current);
+          });
+        }
       } catch {
         out.textContent = "couldn't reach GitHub";
       }
