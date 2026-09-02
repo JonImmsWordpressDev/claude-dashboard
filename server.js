@@ -279,6 +279,13 @@ const server = http.createServer((req, res) => {
             collector.assemble();
             return json(res, 200, { ok: true, pinned });
           }
+          if (payload.renameSession !== undefined) {
+            const id = String(payload.renameSession || '');
+            if (!collector.findSessionFile(id)) return json(res, 404, { ok: false, error: 'unknown session' });
+            const name = cfg.setSessionName(id, String(payload.name || ''));
+            collector.assemble();
+            return json(res, 200, { ok: true, name, title: collector.findSessionFile(id).title });
+          }
           if (payload.mutePath !== undefined) {
             const known = collector
               .projectPaths()

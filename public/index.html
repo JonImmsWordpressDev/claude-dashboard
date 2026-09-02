@@ -402,6 +402,15 @@
   .s-title[data-session], .di-title[data-session] { cursor: pointer; }
   .s-title[data-session]:hover, .di-title[data-session]:hover { color: var(--accent); }
 
+  /* inline session rename (pencil button swaps the title for this input) */
+  .rename-input {
+    font: inherit; font-size: 12.5px; color: var(--ink);
+    background: var(--surface2); border: 1px solid var(--accent);
+    border-radius: 2px; padding: 2px 6px; flex: 1; min-width: 0; width: 100%;
+    box-sizing: border-box;
+  }
+  .rename-input:focus { outline: none; }
+
   /* transcript rendering */
   .t-turn { margin: 10px 0; }
   .t-user {
@@ -934,6 +943,10 @@ function copyBtn(cmd) {
 
 // Live sessions are already open somewhere; only offer open on idle ones.
 let liveIds = new Set();
+function renameBtn(sessionId, title) {
+  return `<button class="copy rename-btn" data-rename-session="${esc(sessionId)}" data-title="${esc(title || '')}" title="Rename this session">✎</button>`;
+}
+
 function openBtn(sessionId) {
   if (liveIds.has(sessionId)) return '';
   return `<button class="copy open-btn" data-open="${esc(sessionId)}" title="Open this session">open ⬈</button>`;
@@ -972,6 +985,7 @@ function liveCard(s) {
       ${modelChip(s.model)}
       <span class="dep-elapsed">${elapsed(s.startedAt)}</span>
       ${statusFlap(s)}
+      ${renameBtn(s.sessionId, s.title)}
       ${copyBtn(s.resumeCommand)}
     </div>
   </div>`;
@@ -985,6 +999,7 @@ function projectCard(p) {
             sess.worktree ? `<span class="wt mono">⎇ ${esc(sess.worktree)}</span>` : ''}${esc(sess.title)}</span>
           ${modelChip(sess.model)}
           <span class="s-when">${relTime(sess.lastActivityAt)}</span>
+          ${renameBtn(sess.sessionId, sess.title)}
           ${openBtn(sess.sessionId)}
           ${copyBtn(sess.resumeCommand)}
         </li>`).join('')}</ul>`
@@ -1017,6 +1032,7 @@ function renderPinned(state) {
       ${modelChip(p.model)}
       <span class="s-when">${esc(p.projectName)}</span>
       <span class="s-when">${relTime(p.lastActivityAt)}</span>
+      ${renameBtn(p.sessionId, p.title)}
       <button class="copy" data-pin="${esc(p.sessionId)}" title="Unpin">unpin</button>
     </div>`).join(''));
 }
@@ -1117,7 +1133,11 @@ function renderDigest(state) {
   patch($('#digest-body'), html);
 }
 
+let renderDeferred = false; // an SSE tick arrived while a rename input was open
 function render(state) {
+  // Rebuilding the DOM mid-edit would wipe the rename input; catch up afterwards.
+  if (document.querySelector('.rename-input')) { renderDeferred = true; return; }
+  renderDeferred = false;
   if (state.theme && state.theme !== 'board') document.documentElement.dataset.theme = state.theme;
   else delete document.documentElement.dataset.theme;
   liveIds = new Set((state.liveSessions || []).map((s) => s.sessionId));
@@ -1356,6 +1376,7 @@ function renderDetail(d, name) {
             s.worktree ? `<span class="wt mono">⎇ ${esc(s.worktree)}</span> ` : ''}${esc(s.title)}</span>
           ${fmtCost(s.estCost) ? `<span class="s-when">≈${fmtCost(s.estCost)}</span>` : ''}
           <span class="s-when">${relTime(s.lastActivityAt)}</span>
+          ${renameBtn(s.sessionId, s.title)}
           ${openBtn(s.sessionId)}
           ${copyBtn(s.resumeCommand)}
         </li>`).join('')}</ul>`
@@ -1773,6 +1794,60 @@ async function applyUpdate(out, currentVersion) {
   })();
 }
 
+// Swap a session title for a text input. Enter/blur saves, Escape cancels,
+// an empty name goes back to the automatic title.
+function startRename(btn) {
+  const id = btn.dataset.renameSession;
+  const row = btn.closest('li, .pin-row, .dep-row');
+  const titleEl = row && row.querySelector(`[data-session="${CSS.escape(id)}"]`);
+  if (!titleEl || row.querySelector('.rename-input')) return;
+  const before = btn.dataset.title || '';
+  const input = document.createElement('input');
+  input.className = 'rename-input';
+  input.type = 'text';
+  input.maxLength = 80;
+  input.value = before;
+  input.placeholder = 'Session name — leave empty to reset';
+  titleEl.hidden = true;
+  titleEl.after(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const val = input.value.trim();
+    input.remove();
+    titleEl.hidden = false;
+    if (save && val !== before) {
+      try {
+        const r = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ renameSession: id, name: val }),
+        });
+        const out = await r.json();
+        if (out.ok) {
+          // Drawers aren't re-rendered by SSE, so patch the title in place.
+          const text = [...titleEl.childNodes].find((n) => n.nodeType === 3);
+          if (text) text.textContent = out.title; else titleEl.append(out.title);
+          btn.dataset.title = out.title;
+          toast(val ? `Renamed to "${val}"` : 'Name reset to the automatic title');
+        } else toast(`Couldn't rename: ${out.error}`);
+      } catch {
+        toast("Couldn't reach the server");
+      }
+    }
+    if (renderDeferred && lastState) render(lastState);
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation(); // keep the page's shortcuts (Esc, /, etc.) out of the edit
+    if (e.key === 'Enter') finish(true);
+    else if (e.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
 async function saveSetting(endpoint, payload, note) {
   try {
     const r = await fetch(endpoint, {
@@ -1973,6 +2048,8 @@ document.addEventListener('click', async (e) => {
     }
     return;
   }
+  const rb = e.target.closest('[data-rename-session]');
+  if (rb) { startRename(rb); return; }
   const t = e.target.closest('[data-session]');
   if (t) { openTranscript(t.dataset.session, t.dataset.hl); return; }
   const nb = e.target.closest('[data-new]');

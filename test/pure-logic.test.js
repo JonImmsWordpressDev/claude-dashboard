@@ -590,3 +590,31 @@ test('npmCliCandidates covers the unix prefix and Windows layouts', () => {
   const win = npmCliCandidates('C:/Program Files/nodejs');
   assert.ok(win.some((p) => p.replace(/\\/g, '/').endsWith('C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js')));
 });
+
+// --- custom session names ---
+const { applySessionName } = require('../lib/config');
+
+test('sessionTitle prefers a custom name over the transcript-derived title', () => {
+  const { sessionTitle } = require('../lib/transcripts');
+  const meta = { sessionId: 'abc12345-x', aiTitle: 'Fix the login bug', firstUserPrompt: 'help me' };
+  assert.deepEqual(sessionTitle(meta, { 'abc12345-x': 'Login work' }), { title: 'Login work', source: 'custom' });
+  assert.deepEqual(sessionTitle(meta, { 'other': 'nope' }), { title: 'Fix the login bug', source: 'ai-title' });
+  assert.deepEqual(sessionTitle(meta), { title: 'Fix the login bug', source: 'ai-title' });
+});
+
+test('applySessionName trims, caps at 80 chars, and deletes on empty', () => {
+  const a = applySessionName({}, 's1', '  My session  ');
+  assert.deepEqual(a, { s1: 'My session' });
+  const b = applySessionName(a, 's2', 'x'.repeat(100));
+  assert.equal(b.s2.length, 80);
+  assert.equal(b.s1, 'My session');
+  const c = applySessionName(b, 's1', '   ');
+  assert.deepEqual(Object.keys(c), ['s2']);
+  assert.deepEqual(Object.keys(applySessionName({ s1: 'a' }, 's1', '')), []);
+});
+
+test('applySessionName does not mutate its input', () => {
+  const orig = { s1: 'a' };
+  applySessionName(orig, 's1', 'b');
+  assert.deepEqual(orig, { s1: 'a' });
+});

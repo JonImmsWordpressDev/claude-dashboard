@@ -132,6 +132,8 @@ Edit `names.json` to control how projects are titled:
 
 Unlisted projects fall back to a cleaned-up folder name. Changes are picked up automatically — no restart needed.
 
+Sessions can be renamed too: click the ✎ next to any session title (live board, project cards, pinned strip, or a project's slide-over), type a name, and press Enter. Escape cancels; an empty name goes back to the automatic title. Custom names live in `config.json` under `sessionNames`, keyed by session id, and win over the AI-generated or first-prompt title everywhere.
+
 ## Hiding projects
 
 Edit `ignore.json` — an array of absolute path prefixes. A project is hidden if its path is, or sits under, any listed prefix, so one line hides a whole tree (e.g. all the plugins/themes inside one site). This only hides them from the dashboard, strip, and menu bar; nothing on disk or in `~/.claude` is touched. Picked up automatically.
