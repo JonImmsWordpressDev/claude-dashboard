@@ -618,3 +618,17 @@ test('applySessionName does not mutate its input', () => {
   applySessionName(orig, 's1', 'b');
   assert.deepEqual(orig, { s1: 'a' });
 });
+
+// --- self-update outcome ---
+const { updateOutcome } = require('../lib/update');
+
+test('updateOutcome restarts when the on-disk version differs from the running one', () => {
+  // Tree already pulled by hand (or a previous click): running 1.8.0, disk 1.9.0.
+  assert.deepEqual(updateOutcome('1.8.0', '1.9.0', true), { unchanged: false, willRestart: true });
+  assert.deepEqual(updateOutcome('1.8.0', '1.9.0', false), { unchanged: false, willRestart: false });
+});
+
+test('updateOutcome reports unchanged when disk still matches the running version', () => {
+  assert.deepEqual(updateOutcome('1.8.0', '1.8.0', true), { unchanged: true, willRestart: false });
+  assert.deepEqual(updateOutcome('1.8.0', null, true), { unchanged: true, willRestart: false });
+});

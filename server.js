@@ -186,7 +186,7 @@ const server = http.createServer((req, res) => {
   // relaunch it on the new code.
   if (url === '/api/update' && req.method === 'POST') {
     if (!sameOrigin(req)) return json(res, 403, { ok: false, error: 'forbidden' });
-    runSelfUpdate(__dirname).then((result) => {
+    runSelfUpdate(__dirname, VERSION).then((result) => {
       json(res, result.ok || result.manual ? 200 : 500, result);
       if (result.ok && result.willRestart) {
         setTimeout(() => {
