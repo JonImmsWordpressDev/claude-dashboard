@@ -106,7 +106,10 @@ const server = http.createServer((req, res) => {
     if (url === '/api/state') return json(res, 200, demoState());
     if (url === '/api/health') return json(res, 200, { ok: true, demo: true, version: VERSION });
     if (url === '/api/stats') return json(res, 200, demoStats());
-    if (url === '/api/session') return json(res, 200, demoSession());
+    if (url === '/api/session') {
+      const q = new URL(req.url, 'http://localhost').searchParams;
+      return json(res, 200, demoSession(q.get('id'), q.get('after')));
+    }
     if (url === '/api/search') return json(res, 200, { q: '', prompts: [], titles: [], transcripts: null });
     if (url === '/api/project') {
       return json(res, 200, {

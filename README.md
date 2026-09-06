@@ -2,11 +2,13 @@
 
 A local, zero-dependency dashboard for all your [Claude Code](https://claude.com/claude-code) projects. Live sessions pinned at the top — including whether one is waiting on your input — with a card per project below: recent sessions, git status, a 14-day activity sparkline, and one-click resume commands.
 
-Everything is read from local files under `~/.claude`, and it never writes to Claude's data — read-only. No API keys to configure. The only automatic network call is to Anthropic's own usage API for your quota meters, authenticated with the Keychain credentials Claude Code already holds (kept in memory, toggleable in settings). Plain Node.js (which Claude Code already requires), zero npm dependencies, macOS.
+Everything is read from local files under `~/.claude`, and it never writes to Claude's data — read-only. No API keys to configure. The only automatic network call is to Anthropic's own usage API for your quota meters, authenticated with the Keychain credentials Claude Code already holds (kept in memory, toggleable in settings). Plain Node.js (which Claude Code already requires), zero npm dependencies. macOS first, Linux supported, Windows experimental.
 
 **Requirements:** macOS or Linux (or Windows, experimental — see below), Node.js ≥ 18, Claude Code.
 
-![Claude Dashboard, dark mode — live sessions, unpushed-work strip, and the daily digest](docs/screenshots/dashboard-dark.png)
+![Claude Dashboard, dark mode — live sessions, the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
+
+*Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`) — the projects are invented.*
 
 ## Try it in one command
 
@@ -74,15 +76,23 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 ## What you're looking at
 
 - **Departures** — every live `claude` CLI session as a row on the board: start time, project, current task, model, elapsed time, and a split-flap status cell. The cell flips to an amber **needs you** when a session is waiting on your input — readable from across the room.
+- **Mission Control** — the `▦` button in the header (or `⌘K` → Mission Control) tiles every live session side by side, each pane following its own transcript. One screen for "what is everything doing right now".
+- **Pinned** — `☆ pin` on any transcript sticks that session to a strip under the departures board, so the thing you care about stays in view whether it's running or not.
 - **Digest** — what happened across every project, grouped by day. Each entry shows the session's recap (Claude's own "away summary" where one exists — click to expand), how many tasks it completed, and an open button. Switch the window between day / 3 days / week; collapses out of the way and remembers your choice.
 - **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app when it's installed — the **Open in** selector in the header names whichever terminal you've configured (auto-detected on first run). The `⧉` button copies the `claude --resume` command instead.
-- **Header meters** — your plan and rate-limit tier (Free/Pro/Max/Enterprise/API, detected from Claude Code's local account cache), live session and weekly usage from Anthropic's usage API via your existing Claude Code sign-in, plus extra-usage spend. First run may show one macOS Keychain prompt — click Always Allow.
-![Transcript viewer live-following a running session — this one shows the session that built the dashboard](docs/screenshots/transcript.png)
+- **Header meters** — your plan and rate-limit tier (Free/Pro/Max/Enterprise/API, detected from Claude Code's local account cache), live session and weekly usage from Anthropic's usage API via your existing Claude Code sign-in, plus extra-usage spend. Set a **weekly budget** in settings and a third meter tracks estimated spend against it, with one alert each at 75 / 90 / 100%. First run may show one macOS Keychain prompt — click Always Allow.
+
+![Mission Control — every live session tiled side by side, each pane following its own transcript](docs/screenshots/mission-control.png)
+
+![Transcript viewer live-following a running session — prompts, replies as markdown, tool calls as one-liners](docs/screenshots/transcript.png)
 
 - **Transcripts** — click any session title (cards, digest, search results, project drawer) to read the conversation: your prompts, Claude's replies rendered as markdown, tool calls as compact one-liners, and away-summaries highlighted. Long sessions show the newest ~1200 events. **Running sessions follow live** — a `● live` badge appears, new turns stream in every few seconds, and the view sticks to the bottom unless you've scrolled up to read.
-- **Search** — the header box searches every prompt you've ever sent plus all session titles (Enter to run, 2+ characters). Narrow with `project:name` or `since:7d` / `since:2026-08-01`. Clicking a prompt result opens the transcript scrolled to the matching turn.
+- **Search** — the header box searches every prompt you've ever sent plus all session titles (Enter to run, 2+ characters). Narrow with `project:name` or `since:7d` / `since:2026-08-01`. Clicking a prompt result opens the transcript scrolled to the matching turn. If the answer isn't in a prompt, **search inside full transcripts** runs the same query across the conversation bodies — slower, so it's a second click rather than the default.
 - **Command palette** — `⌘K` from anywhere: fuzzy-jump to any project or session, watch a live session, start a new one, open settings or stats. Arrow keys + Enter.
 - **Stats** — click the weekly bar chart in the header: a 26-week activity heatmap, your busiest hours, a weekly-rhythm grid (prompts by day of week and hour), estimated spend per day for the last 90 days, and an all-time per-model token/cost breakdown. The daily spend history is computed from your existing transcripts, so it's full from the first run.
+- **Your week with Claude** — a 7-day report (`⌘K`, or the button at the top of stats): sessions, prompts, estimated spend against your budget, busiest day and hour, models used, and how long you typically take to answer a question. Exports as markdown.
+- **Day timeline** — `⌘K` → Day timeline: the last 24 hours as one lane per project, with amber ticks where a session needed you.
+- **Catch-up** — the `🔔` in the header keeps every notification the server has fired since it started, with an unread count. Useful after a morning away from the desk.
 - **Export** — any transcript downloads as clean markdown via the `export ⇩` button.
 - **New session** — the `⊕` button on a project card opens a fresh terminal window in that project running `claude`.
 - **Cost trend** — the small bar chart in the header is estimated cost per week for the last 8 weeks (hover for numbers). Costs include subagent tokens.
@@ -90,7 +100,8 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Claude.ai chats** — import the official export from claude.ai (Settings → Privacy → Export data, then feed `conversations.json` to ⚙ settings here) and your chats become browsable (`⌘K` → Claude.ai chats) and full-text searchable next to your coding sessions. Stored slimmed in your local config dir, gitignored, never uploaded anywhere.
 
 ![Stats view: activity heatmap, busiest hours, weekly rhythm, 90-day spend, and per-model cost breakdowns](docs/screenshots/stats.png)
-- **Project details** — click any project's name for a slide-over with its full session list, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools). Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
+
+- **Project details** — click any project's name for a slide-over with its full session list, recent git commits, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools). Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
 - **Unpushed work strip** — an amber band listing every repo with uncommitted changes (`●n`) or unpushed commits (`↑n`), sorted by recent activity. Disappears when everything's clean.
 - **Dormant** — projects with no activity for 60+ days, tucked away at the bottom.
 - Worktree sessions (`.claude/worktrees/…`) are folded into their parent project and badged `⎇`.
@@ -112,8 +123,12 @@ The ⚙ gear in the header opens settings — no JSON editing required:
 
 - **Notifications** on/off (writes `config.json`); per-project mute lives on each project's slide-over
 - **Terminal** for open/new-session buttons: Ghostty, iTerm2, or Terminal.app, auto-detected (`config.json`)
-- **Rename any project** (writes `names.json`) or **hide it** and its whole subtree (writes `ignore.json`), with an unhide list below
+- **Claude desktop app**: lets `open ⬈` hand a session to the Claude app instead of a terminal
+- **Usage meters** on/off — this is the switch for the one automatic network call
 - **Theme**: Departures board (follows system light/dark), Phosphor, Amber CRT, Midnight, or Newsprint (`config.json`)
+- **Weekly budget** in dollars — drives the header meter and the 75 / 90 / 100% alerts; `0` turns it off
+- **Rename any project** (writes `names.json`) or **hide it** and its whole subtree (writes `ignore.json`), with an unhide list below
+- **Claude.ai chats**: pick the `conversations.json` from your claude.ai export to make those chats searchable here
 - **Updates**: "check for updates" asks GitHub only when you click; when a new release is out, **update now** pulls it in place (git or npm installs) and service installs restart themselves on the new version
 
 Everything saves instantly; the underlying files stay hand-editable. Keyboard: `⌘K` for the palette, `/` for search, `Esc` closes anything.
@@ -147,6 +162,7 @@ Edit `ignore.json` — an array of absolute path prefixes. A project is hidden i
 | `CLAUDE_DASH_NOTIFY` | unset | `0` = disable macOS notifications |
 | `CLAUDE_DASH_HOST` | `127.0.0.1` | Bind address — see below before changing |
 | `CLAUDE_DASH_DEMO` | unset | `1` = serve believable fake data (screenshots, trying it without Claude history) |
+| `CLAUDE_DASH_OPEN` | unset | `1` = open the browser on startup (what `npx` sets for you) |
 | `CLAUDE_DASH_CONFIG_DIR` | repo dir | Where config.json/names.json/ignore.json live (auto-falls back to `~/.config/claude-dashboard`) |
 
 The server binds to `127.0.0.1` only by default.
@@ -172,6 +188,14 @@ The recommended path is [Tailscale](https://tailscale.com): install it on the Ma
 - Logs: `~/Library/Logs/claude-dashboard.log`
 - Restart after pulling changes: `launchctl kickstart -k gui/$(id -u)/com.claude-dashboard`
 - Tests: `node --test test/pure-logic.test.js`
+
+## Demo mode
+
+```bash
+CLAUDE_DASH_DEMO=1 node server.js
+```
+
+Every `/api/*` route serves invented data from `lib/demo.js` instead of reading `~/.claude` — two live sessions, a handful of projects, a full transcript. Nothing touches your own history, so it's the safe way to try the UI, record a walkthrough, or take screenshots. Every image in this README comes from it. Edit `lib/demo.js` if you want different fixtures.
 
 ## Data sources
 
