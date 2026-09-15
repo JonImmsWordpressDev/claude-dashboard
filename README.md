@@ -75,8 +75,9 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 
 ## What you're looking at
 
-- **Departures** — every live `claude` CLI session as a row on the board: start time, project, current task, model, elapsed time, and a split-flap status cell. The cell flips to an amber **needs you** when a session is waiting on your input — readable from across the room.
+- **Departures** — every live `claude` CLI session as a row on the board: start time, project, current task, model, elapsed time, and a split-flap status cell. The cell flips to an amber **needs you** when a session is waiting on your input — readable from across the room. A second line under the title says what it needs: `?` for a question Claude asked (with its options), `🔒` for a tool call awaiting permission (with the command or file), or the last question in Claude's reply, or failing that the first line of its final paragraph.
 - **Mission Control** — the `▦` button in the header (or `⌘K` → Mission Control) tiles every live session side by side, each pane following its own transcript. One screen for "what is everything doing right now".
+- **Agents** — a session running subagents or an agent team shows them under its Mission Control pane: name, type, model, and a pulsing `●` while an agent has written in the last two minutes, `○` once it has gone quiet (idle teammates stay alive, so quiet is not finished), with the team name when there is one. Finished sessions list them at the top of the transcript.
 - **Pinned** — `☆ pin` on any transcript sticks that session to a strip under the departures board, so the thing you care about stays in view whether it's running or not.
 - **Digest** — what happened across every project, grouped by day. Each entry shows the session's recap (Claude's own "away summary" where one exists — click to expand), how many tasks it completed, and an open button. Switch the window between day / 3 days / week; collapses out of the way and remembers your choice.
 - **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app when it's installed — the **Open in** selector in the header names whichever terminal you've configured (auto-detected on first run). The `⧉` button copies the `claude --resume` command instead.
@@ -94,6 +95,8 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Day timeline** — `⌘K` → Day timeline: the last 24 hours as one lane per project, with amber ticks where a session needed you.
 - **Catch-up** — the `🔔` in the header keeps every notification the server has fired since it started, with an unread count. Useful after a morning away from the desk.
 - **Export** — any transcript downloads as clean markdown via the `export ⇩` button.
+- **Changes** — a `Δ n` chip on any session row counts the files Claude edited. Click it (or `changes` in the transcript header) for the list with `+added −removed` per file and a unified diff of what the session changed, from the pre-edit backup Claude Code keeps to the file as it is on disk now. Files with several checkpoints also offer each step (`v1 → v2`). Read-only: nothing here reverts anything.
+- **Notes** — `note` in the transcript header attaches a free-text note to a session (⌘⏎ saves, empty removes). Rows with a note show `≡`, hover to read it, and notes are searchable from the header box. Stored in `config.json` under `sessionNotes`.
 - **New session** — the `⊕` button on a project card opens a fresh terminal window in that project running `claude`.
 - **Cost trend** — the small bar chart in the header is estimated cost per week for the last 8 weeks (hover for numbers). Costs include subagent tokens.
 - **Models everywhere** — every session shows which model ran it (live cards, digest, session lists), and the stats view breaks down usage per model and per project.
@@ -102,18 +105,20 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 ![Stats view: activity heatmap, busiest hours, weekly rhythm, 90-day spend, and per-model cost breakdowns](docs/screenshots/stats.png)
 
 - **Project details** — click any project's name for a slide-over with its full session list, recent git commits, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools). Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
+- **Plugins & MCP** — `⌘K` → Plugins & MCP (or the button in settings) lists every installed plugin with its marketplace, version, on/off state and a `stale` flag when its marketplace was refreshed after the plugin was last updated, plus every MCP server with its scope, the projects that use it, an `off` chip for servers you have disabled in a project, and an amber `needs auth` when Claude Code says so. Read-only; server secrets never reach the browser.
 - **Unpushed work strip** — an amber band listing every repo with uncommitted changes (`●n`) or unpushed commits (`↑n`), sorted by recent activity. Disappears when everything's clean.
 - **Dormant** — projects with no activity for 60+ days, tucked away at the bottom.
 - Worktree sessions (`.claude/worktrees/…`) are folded into their parent project and badged `⎇`.
-- **Notifications** — the moment any session flips to "waiting for input", you get a macOS notification (with sound) naming the project. Fires once per wait, never on server restart. Mute a single noisy project from its slide-over (the bell button at the top), or disable everything with `CLAUDE_DASH_NOTIFY=0` in the plist. Notifications arrive via Script Editor/osascript — if you don't see them, allow it under System Settings → Notifications.
+- **Notifications** — the moment any session flips to "waiting for input", you get a macOS notification (with sound) naming the project and what it needs — the question, the command awaiting permission, or Claude's last line. Fires once per wait, never on server restart. Mute a single noisy project from its slide-over (the bell button at the top), or disable everything with `CLAUDE_DASH_NOTIFY=0` in the plist. Notifications arrive via Script Editor/osascript — if you don't see them, allow it under System Settings → Notifications.
 - **Cost estimates** — the header shows the estimated list-price value of the last 7 days across all projects; each project card and digest entry shows its share. Computed from token usage in the transcripts at Anthropic list rates (cache reads at 0.1×, cache writes at 1.25×). On a subscription plan these are relative weights, not billed dollars — use them to see where your usage goes. Subagent tokens are included.
 - **Stuck flag** — a session that's "busy" but has written nothing to its transcript for 10+ minutes gets an amber `quiet Nm` cell; at 20 minutes you get one notification. It's a hint, not a verdict — a session waiting on slow background work can look the same.
+- **Idle reminder** — a session left on **needs you** for an hour (configurable in settings, `0` to turn off) gets one more notification and a `still waiting` entry in the catch-up bell, and its elapsed cell turns amber with the wait time. Nothing repeats until you answer it.
 
 ![Light mode — the same board, printed on paper](docs/screenshots/dashboard-light.png)
 
 ## Menu bar companion
 
-A SwiftBar plugin lives in `menubar/claude-dash.15s.sh`. The menu bar shows `❯ N` while sessions run, `❯ N⚠` in amber when one is waiting on you, and `❯ N?` when a busy session has gone quiet. The dropdown lists live sessions, repos with unpushed work, the 7-day estimate, and an "Open dashboard" link.
+A SwiftBar plugin lives in `menubar/claude-dash.15s.sh`. The menu bar shows `❯ N` while sessions run, `❯ N⚠` in amber when one is waiting on you, and `❯ N?` when a busy session has gone quiet, and `❯ N⚠⏳` when one of them has waited past the idle reminder. The dropdown lists live sessions, repos with unpushed work, the 7-day estimate, and an "Open dashboard" link.
 
 Setup: `brew install --cask swiftbar`, then point SwiftBar's plugin folder at this repo's `menubar/` directory. The plugin refreshes every 15 seconds (rename the file to change the interval).
 
@@ -127,6 +132,7 @@ The ⚙ gear in the header opens settings — no JSON editing required:
 - **Usage meters** on/off — this is the switch for the one automatic network call
 - **Theme**: Departures board (follows system light/dark), Phosphor, Amber CRT, Midnight, or Newsprint (`config.json`)
 - **Weekly budget** in dollars — drives the header meter and the 75 / 90 / 100% alerts; `0` turns it off
+- **Idle reminder** in minutes — one extra notification when a session has waited that long; `0` turns it off
 - **Rename any project** (writes `names.json`) or **hide it** and its whole subtree (writes `ignore.json`), with an unhide list below
 - **Claude.ai chats**: pick the `conversations.json` from your claude.ai export to make those chats searchable here
 - **Updates**: "check for updates" asks GitHub only when you click; when a new release is out, **update now** pulls it in place (git or npm installs) and service installs restart themselves on the new version
@@ -148,6 +154,7 @@ Edit `names.json` to control how projects are titled:
 Unlisted projects fall back to a cleaned-up folder name. Changes are picked up automatically — no restart needed.
 
 Sessions can be renamed too: click the ✎ next to any session title (live board, project cards, pinned strip, or a project's slide-over), type a name, and press Enter. Escape cancels; an empty name goes back to the automatic title. Custom names live in `config.json` under `sessionNames`, keyed by session id, and win over the AI-generated or first-prompt title everywhere.
+Notes work the same way: `sessionNotes` in `config.json`, keyed by session id, editable by hand.
 
 ## Hiding projects
 

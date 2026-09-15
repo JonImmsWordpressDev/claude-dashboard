@@ -200,7 +200,7 @@ function assistantLine({ id, model, ts, input = 0, output = 0 }) {
 }
 
 function freshScan() {
-  return { offset: 0, aiTitle: null, usage: {}, days: {}, lastMsgId: null, lastModel: null };
+  return { offset: 0, aiTitle: null, usage: {}, days: {}, lastMsgId: null, lastModel: null, changes: undefined };
 }
 
 // Local-time timestamps so the tests pass in any timezone.
@@ -331,7 +331,13 @@ test('isProjectMuted handles empty or missing list', () => {
 });
 
 // --- Mission Control: subagent summary ---
-const { subagentSummary } = require('../lib/transcripts');
+const { subagentSummary, shouldReadMeta } = require('../lib/transcripts');
+
+test('shouldReadMeta retries until a meta file has actually been parsed', () => {
+  assert.equal(shouldReadMeta(undefined), true);
+  assert.equal(shouldReadMeta({ agentFromMeta: false }), true);
+  assert.equal(shouldReadMeta({ agentFromMeta: true }), false);
+});
 
 test('subagentSummary carries count and tokens rounded to 0.1M', () => {
   const meta = {
@@ -631,4 +637,756 @@ test('updateOutcome restarts when the on-disk version differs from the running o
 test('updateOutcome reports unchanged when disk still matches the running version', () => {
   assert.deepEqual(updateOutcome('1.8.0', '1.8.0', true), { unchanged: true, willRestart: false });
   assert.deepEqual(updateOutcome('1.8.0', null, true), { unchanged: true, willRestart: false });
+});
+
+// --- waitingReason and reasonText ---
+const { waitingReason, reasonText } = require('../lib/transcripts');
+
+// Transcript record builders. Shapes mirror real ~/.claude transcripts.
+function userPrompt(text) {
+  return { type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } };
+}
+function toolResult(id) {
+  return { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] } };
+}
+function assistantText(text) {
+  return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } };
+}
+function assistantTool(id, name, input) {
+  return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id, name, input }] } };
+}
+function askQuestion(id, question, labels) {
+  return assistantTool(id, 'AskUserQuestion', {
+    questions: [{ question, header: 'Pick', multiSelect: false, options: labels.map((label) => ({ label, description: '' })) }],
+  });
+}
+
+test('waitingReason: pending AskUserQuestion yields a question with option labels', () => {
+  const r = waitingReason([
+    userPrompt('build it'),
+    assistantText('Some thinking first.'),
+    askQuestion('t1', 'Which payment provider?', ['Stripe', 'Adyen', 'Braintree']),
+  ]);
+  assert.deepEqual(r, { kind: 'question', text: 'Which payment provider?', options: ['Stripe', 'Adyen', 'Braintree'] });
+});
+
+test('waitingReason: an answered question falls through to the later text', () => {
+  const r = waitingReason([
+    userPrompt('build it'),
+    askQuestion('t1', 'Which payment provider?', ['Stripe', 'Adyen']),
+    toolResult('t1'),
+    assistantText('Going with Stripe. Shall I also wire the webhook?'),
+  ]);
+  assert.deepEqual(r, { kind: 'reply', text: 'Going with Stripe. Shall I also wire the webhook?' });
+});
+
+test('waitingReason: pending Bash call is a permission with the command', () => {
+  const r = waitingReason([
+    userPrompt('run the tests'),
+    assistantTool('t2', 'Bash', { command: 'npm test -- checkout', description: 'Run checkout tests' }),
+  ]);
+  assert.deepEqual(r, { kind: 'permission', text: 'Bash npm test -- checkout' });
+});
+
+test('waitingReason: pending Edit call is a permission with the file path', () => {
+  const r = waitingReason([
+    userPrompt('fix it'),
+    assistantTool('t3', 'Edit', { file_path: '/repo/src/cart.ts', old_string: 'a', new_string: 'b' }),
+  ]);
+  assert.deepEqual(r, { kind: 'permission', text: 'Edit /repo/src/cart.ts' });
+});
+
+test('waitingReason: permission text is capped at 120 characters', () => {
+  const r = waitingReason([userPrompt('go'), assistantTool('t4', 'Bash', { command: 'x'.repeat(500) })]);
+  assert.equal(r.kind, 'permission');
+  assert.equal(r.text.length, 120);
+});
+
+test('waitingReason: reply uses the last line ending in a question mark', () => {
+  const r = waitingReason([
+    userPrompt('go'),
+    assistantText('Done with the endpoint.\n\nTwo options remain.\n\nWhich one do you want?\n\nI can start either now.'),
+  ]);
+  assert.deepEqual(r, { kind: 'reply', text: 'Which one do you want?' });
+});
+
+test('waitingReason: reply without a question mark uses the first line of the final paragraph', () => {
+  const r = waitingReason([
+    userPrompt('go'),
+    assistantText('## Summary\n\nAll 14 tests pass.\n\n- **Next:** deploy when ready.\n- second bullet'),
+  ]);
+  assert.deepEqual(r, { kind: 'reply', text: 'Next: deploy when ready.' });
+});
+
+test('waitingReason: only the last turn counts — an old question is not resurfaced', () => {
+  const r = waitingReason([
+    userPrompt('first'),
+    askQuestion('t1', 'Old question?', ['a', 'b']),
+    userPrompt('second prompt, answered by typing'),
+    assistantText('Okay, doing that now.'),
+  ]);
+  assert.deepEqual(r, { kind: 'reply', text: 'Okay, doing that now.' });
+});
+
+test('waitingReason: harness noise user records do not start a new turn', () => {
+  const r = waitingReason([
+    userPrompt('go'),
+    askQuestion('t1', 'Which one?', ['a', 'b']),
+    userPrompt('<local-command-caveat>Caveat: the messages below…</local-command-caveat>'),
+  ]);
+  assert.equal(r.kind, 'question');
+});
+
+test('waitingReason: sidechain records are ignored', () => {
+  const r = waitingReason([
+    userPrompt('go'),
+    { ...assistantTool('s1', 'Bash', { command: 'ls' }), isSidechain: true },
+    assistantText('Finished.'),
+  ]);
+  assert.deepEqual(r, { kind: 'reply', text: 'Finished.' });
+});
+
+test('waitingReason: question text and options are capped', () => {
+  const r = waitingReason([userPrompt('go'), askQuestion('t1', 'q'.repeat(400), ['a'.repeat(80), 'b', 'c', 'd', 'e', 'f', 'g'])]);
+  assert.equal(r.text.length, 200);
+  assert.equal(r.options.length, 6);
+  assert.equal(r.options[0].length, 40);
+});
+
+test('waitingReason: no assistant turn returns null', () => {
+  assert.equal(waitingReason([userPrompt('hello')]), null);
+  assert.equal(waitingReason([]), null);
+});
+
+test('waitingReason: a plain-string last prompt still starts a new turn', () => {
+  const r = waitingReason([
+    userPrompt('first'),
+    askQuestion('t1', 'Old question?', ['a', 'b']),
+    { type: 'user', message: { role: 'user', content: 'second prompt' } },
+    assistantText('Okay, doing that now.'),
+  ]);
+  assert.deepEqual(r, { kind: 'reply', text: 'Okay, doing that now.' });
+});
+
+test('waitingReason: backticked identifiers keep their underscores, lose the backticks', () => {
+  const r = waitingReason([
+    userPrompt('go'),
+    assistantText('Rename `file_path` to `path`?'),
+  ]);
+  assert.deepEqual(r, { kind: 'reply', text: 'Rename file_path to path?' });
+});
+
+test('waitingReason: a doubled list marker is fully stripped', () => {
+  const r = waitingReason([
+    userPrompt('go'),
+    assistantText('Some notes.\n\n- 1. first item\n- second item'),
+  ]);
+  assert.deepEqual(r, { kind: 'reply', text: 'first item' });
+});
+
+test('waitingReason: a pending ExitPlanMode reads as a plain approval prompt', () => {
+  const r = waitingReason([
+    userPrompt('plan it'),
+    assistantTool('t5', 'ExitPlanMode', { plan: '## Plan\n\n1. Do the thing\n2. Do the other thing' }),
+  ]);
+  assert.deepEqual(r, { kind: 'permission', text: 'ExitPlanMode approve the plan' });
+});
+
+test('Collector.reasonFor: waitingFor wins over the stored transcript reason', () => {
+  const { Collector } = require('../lib/collector');
+  const c = new Collector();
+  c.raw.metaBySession.set('s1', { waitingReason: { kind: 'question', text: 'Which?', options: ['a'] } });
+  assert.deepEqual(
+    c.reasonFor({ sessionId: 's1', waitingFor: 'typed answer' }),
+    { kind: 'reply', text: 'typed answer' }
+  );
+  assert.deepEqual(
+    c.reasonFor({ sessionId: 's1', waitingFor: null }),
+    { kind: 'question', text: 'Which?', options: ['a'] }
+  );
+  assert.equal(c.reasonFor({ sessionId: 'nope' }), null);
+});
+
+test('reasonText formats each kind for a notification body', () => {
+  assert.equal(reasonText({ kind: 'question', text: 'Which one?', options: ['a', 'b'] }), 'Which one? (a / b)');
+  assert.equal(reasonText({ kind: 'question', text: 'Which one?', options: [] }), 'Which one?');
+  assert.equal(reasonText({ kind: 'permission', text: 'Bash npm test' }), 'permission: Bash npm test');
+  assert.equal(reasonText({ kind: 'reply', text: 'Shall I continue?' }), 'Shall I continue?');
+  assert.equal(reasonText(null), 'Claude is waiting for your input');
+});
+
+const { diffLines } = require('../lib/diff');
+
+test('diffLines: identical inputs produce no hunks', () => {
+  const r = diffLines('a\nb\nc\n', 'a\nb\nc\n');
+  assert.deepEqual(r, { hunks: [], added: 0, removed: 0, truncated: false, tooLarge: false });
+});
+
+test('diffLines: pure insert', () => {
+  const r = diffLines('a\nb\n', 'a\nx\nb\n');
+  assert.equal(r.added, 1);
+  assert.equal(r.removed, 0);
+  assert.equal(r.hunks.length, 1);
+  assert.deepEqual(r.hunks[0].lines, [[' ', 'a'], ['+', 'x'], [' ', 'b']]);
+  assert.deepEqual([r.hunks[0].aStart, r.hunks[0].aLines, r.hunks[0].bStart, r.hunks[0].bLines], [1, 2, 1, 3]);
+});
+
+test('diffLines: pure delete', () => {
+  const r = diffLines('a\nx\nb\n', 'a\nb\n');
+  assert.equal(r.added, 0);
+  assert.equal(r.removed, 1);
+  assert.deepEqual(r.hunks[0].lines, [[' ', 'a'], ['-', 'x'], [' ', 'b']]);
+});
+
+test('diffLines: replacement in the middle', () => {
+  const r = diffLines('a\nb\nc\n', 'a\nB\nc\n');
+  assert.deepEqual(r.hunks[0].lines, [[' ', 'a'], ['-', 'b'], ['+', 'B'], [' ', 'c']]);
+  assert.equal(r.added, 1);
+  assert.equal(r.removed, 1);
+});
+
+test('diffLines: distant edits become two hunks with 3 lines of context', () => {
+  const a = Array.from({ length: 20 }, (_, i) => `l${i}`).join('\n');
+  const b = a.replace('l2', 'L2').replace('l17', 'L17');
+  const r = diffLines(a, b);
+  assert.equal(r.hunks.length, 2);
+  assert.equal(r.hunks[0].aStart, 1);           // context can't go above line 1
+  assert.deepEqual(r.hunks[0].lines.map((l) => l[0]), [' ', ' ', '-', '+', ' ', ' ', ' ']);
+  assert.equal(r.hunks[1].aStart, 15);          // l14 is index 14 → line 15
+  assert.equal(r.hunks[1].bStart, 15);
+});
+
+test('diffLines: nearby edits merge into one hunk', () => {
+  const a = Array.from({ length: 12 }, (_, i) => `l${i}`).join('\n');
+  const b = a.replace('l3', 'L3').replace('l7', 'L7'); // 3 unchanged lines between → merged
+  const r = diffLines(a, b);
+  assert.equal(r.hunks.length, 1);
+});
+
+test('diffLines: trailing newline difference alone is not a change', () => {
+  assert.equal(diffLines('a\nb', 'a\nb\n').hunks.length, 0);
+});
+
+test('diffLines: empty original is a pure insert; empty result is a pure delete', () => {
+  assert.equal(diffLines('', 'a\nb\n').added, 2);
+  assert.equal(diffLines('a\nb\n', '').removed, 2);
+  assert.deepEqual(diffLines('', '').hunks, []);
+});
+
+test('diffLines: maxChanges caps the output and sets truncated', () => {
+  const a = Array.from({ length: 50 }, (_, i) => `a${i}`).join('\n');
+  const b = Array.from({ length: 50 }, (_, i) => `b${i}`).join('\n');
+  const r = diffLines(a, b, { maxChanges: 10 });
+  assert.equal(r.truncated, true);
+  const changed = r.hunks.flatMap((h) => h.lines).filter((l) => l[0] !== ' ').length;
+  assert.ok(changed <= 10, `expected ≤10 changed lines, got ${changed}`);
+});
+
+test('diffLines: oversized input is refused with tooLarge', () => {
+  const big = 'x'.repeat(500 * 1024);
+  const r = diffLines(big, 'y');
+  assert.equal(r.tooLarge, true);
+  assert.deepEqual(r.hunks, []);
+});
+const { recordChange, mergeChanges } = require('../lib/changes');
+
+test('recordChange adds versions in order and dedupes by version', () => {
+  const c = {};
+  recordChange(c, '/p/a.js', { backupFileName: 'h@v2', version: 2, backupTime: '2026-09-12T10:00:02.000Z' });
+  recordChange(c, '/p/a.js', { backupFileName: 'h@v1', version: 1, backupTime: '2026-09-12T10:00:01.000Z' });
+  recordChange(c, '/p/a.js', { backupFileName: 'h@v2', version: 2, backupTime: '2026-09-12T10:00:02.000Z' });
+  assert.deepEqual(c['/p/a.js'].versions.map((v) => v.v), [1, 2]);
+  assert.equal(c['/p/a.js'].versions[0].backup, 'h@v1');
+  assert.equal(c['/p/a.js'].first, Date.parse('2026-09-12T10:00:01.000Z'));
+  assert.equal(c['/p/a.js'].last, Date.parse('2026-09-12T10:00:02.000Z'));
+});
+
+test('mergeChanges unions paths and versions', () => {
+  const a = {};
+  recordChange(a, '/p/a.js', { backupFileName: 'h@v1', version: 1, backupTime: '2026-09-12T10:00:01.000Z' });
+  const b = {};
+  recordChange(b, '/p/a.js', { backupFileName: 'h@v2', version: 2, backupTime: '2026-09-12T10:00:02.000Z' });
+  recordChange(b, '/p/b.js', { backupFileName: 'g@v1', version: 1, backupTime: '2026-09-12T10:00:03.000Z' });
+  mergeChanges(a, b);
+  assert.deepEqual(Object.keys(a).sort(), ['/p/a.js', '/p/b.js']);
+  assert.deepEqual(a['/p/a.js'].versions.map((v) => v.v), [1, 2]);
+});
+
+test('scanLine: a file-history-delta records the real path and version', () => {
+  const scan = freshScan();
+  scanLine(JSON.stringify({
+    type: 'file-history-delta', messageId: 'm', snapshotMessageId: 's',
+    trackingPath: '/enc/odd/path/lib/config.js',
+    backup: { backupFileName: '8c806e5de25a5806@v1', version: 1, backupTime: '2026-08-26T12:20:00.000Z', realParentDir: '/Users/x/repo/lib' },
+  }), scan);
+  assert.deepEqual(Object.keys(scan.changes), ['/Users/x/repo/lib/config.js']);
+  assert.equal(scan.changes['/Users/x/repo/lib/config.js'].versions[0].backup, '8c806e5de25a5806@v1');
+});
+
+test('scanLine: a file-history-snapshot merges every tracked backup', () => {
+  const scan = freshScan();
+  scanLine(JSON.stringify({
+    type: 'file-history-snapshot', messageId: 'm',
+    snapshot: { messageId: 'm', timestamp: 't', trackedFileBackups: {
+      'README.md': { backupFileName: '2e90@v2', version: 2, backupTime: '2026-08-26T12:21:56.192Z', realParentDir: '/Users/x/repo' },
+      'lib/update.js': { backupFileName: 'f8b7@v2', version: 2, backupTime: '2026-08-26T12:21:56.192Z', realParentDir: '/Users/x/repo/lib' },
+    } },
+  }), scan);
+  assert.deepEqual(Object.keys(scan.changes).sort(), ['/Users/x/repo/README.md', '/Users/x/repo/lib/update.js']);
+});
+
+test('scanLine: a snapshot repeating a delta version is a no-op; count is distinct paths', () => {
+  const scan = freshScan();
+  const bk = { backupFileName: '2e90@v1', version: 1, backupTime: '2026-08-26T12:21:56.192Z', realParentDir: '/Users/x/repo' };
+  scanLine(JSON.stringify({ type: 'file-history-delta', trackingPath: 'README.md', backup: bk }), scan);
+  scanLine(JSON.stringify({ type: 'file-history-snapshot', snapshot: { trackedFileBackups: { 'README.md': bk } } }), scan);
+  assert.equal(scan.changes['/Users/x/repo/README.md'].versions.length, 1);
+  assert.equal(Object.keys(scan.changes).length, 1);
+});
+
+test('scanLine: an empty snapshot creates no changes map', () => {
+  const scan = freshScan();
+  scanLine(JSON.stringify({ type: 'file-history-snapshot', snapshot: { trackedFileBackups: {} } }), scan);
+  assert.equal(scan.changes, undefined);
+});
+
+test('mergeChanges into a fresh map leaves the source entries untouched', () => {
+  const cached = {};
+  recordChange(cached, '/p/a.js', { backupFileName: 'h@v1', version: 1, backupTime: '2026-09-12T10:00:01.000Z' });
+  const sub = {};
+  recordChange(sub, '/p/a.js', { backupFileName: 'h@v2', version: 2, backupTime: '2026-09-12T10:00:02.000Z' });
+  const merged = mergeChanges(mergeChanges({}, cached), sub);
+  assert.deepEqual(merged['/p/a.js'].versions.map(v => v.v), [1, 2]);
+  assert.deepEqual(cached['/p/a.js'].versions.map(v => v.v), [1]);
+  assert.notEqual(merged['/p/a.js'], cached['/p/a.js']);
+});
+
+const { changeFiles, relPath, backupPath, diffTarget, realPathOf, sessionChangeList, sessionFileDiff } = require('../lib/changes');
+
+test('changeFiles orders by last edit desc and numbers stably', () => {
+  const c = {
+    '/r/b.js': { versions: [{ v: 1, backup: 'b@v1', at: 10 }], first: 10, last: 10 },
+    '/r/a.js': { versions: [{ v: 1, backup: 'a@v1', at: 5 }, { v: 2, backup: 'a@v2', at: 30 }], first: 5, last: 30 },
+  };
+  const files = changeFiles(c);
+  assert.deepEqual(files.map((f) => [f.n, f.path]), [[0, '/r/a.js'], [1, '/r/b.js']]);
+});
+
+test('relPath strips the project root, leaves outside paths absolute', () => {
+  assert.equal(relPath('/r/lib/x.js', '/r'), 'lib/x.js');
+  assert.equal(relPath('/r/lib/x.js', '/r/'), 'lib/x.js');
+  assert.equal(relPath('/Users/me/.claude/projects/p/memory/m.md', '/r'), '/Users/me/.claude/projects/p/memory/m.md');
+  assert.equal(relPath('/rest/x.js', '/r'), '/rest/x.js'); // prefix but not a directory boundary
+});
+
+test('backupPath confines reads to the session directory', () => {
+  const p = backupPath('e84aac52-9396-4e16-9b0f-22e515c501e0', '6a2e7148c75ec392@v1');
+  assert.ok(p.endsWith('/file-history/e84aac52-9396-4e16-9b0f-22e515c501e0/6a2e7148c75ec392@v1'));
+  assert.equal(backupPath('../sessions', '6a2e7148c75ec392@v1'), null);
+  assert.equal(backupPath('e84aac52-9396-4e16-9b0f-22e515c501e0', '../../settings.json'), null);
+  assert.equal(backupPath('e84aac52-9396-4e16-9b0f-22e515c501e0', 'zz@v1'), null);
+});
+
+test('diffTarget: anything but a positive integer means the file on disk', () => {
+  assert.equal(diffTarget(undefined), 'disk');
+  assert.equal(diffTarget(null), 'disk');
+  assert.equal(diffTarget('disk'), 'disk');
+  assert.equal(diffTarget(NaN), 'disk');
+  assert.equal(diffTarget(0), 'disk');
+  assert.equal(diffTarget('2'), 2);
+  assert.equal(diffTarget(3), 3);
+});
+
+test('recordChange keeps a null backup at v1 (file created), ignores one at v>1', () => {
+  const c = {};
+  recordChange(c, '/p/new.js', { backupFileName: null, version: 1, backupTime: '2026-09-12T10:00:00.000Z' });
+  assert.deepEqual(c['/p/new.js'].versions, [{ v: 1, backup: null, at: Date.parse('2026-09-12T10:00:00.000Z') }]);
+  recordChange(c, '/p/new.js', { backupFileName: 'h@v2', version: 2, backupTime: '2026-09-12T10:00:02.000Z' });
+  recordChange(c, '/p/new.js', { backupFileName: null, version: 3, backupTime: '2026-09-12T10:00:03.000Z' });
+  assert.deepEqual(c['/p/new.js'].versions.map((v) => v.v), [1, 2]);
+});
+
+test('sessionChangeList: a created file (v1 null backup) diffs against empty original', async () => {
+  const changes = { '/p/new.js': { versions: [{ v: 1, backup: null, at: 10 }], first: 10, last: 10 } };
+  const reader = async (p) => (p === '/p/new.js' ? 'a\nb\n' : null);
+  const { files } = await sessionChangeList({ sessionId: 's', changes, root: '/p', readFile: reader });
+  assert.deepEqual(files[0], {
+    n: 0, path: '/p/new.js', rel: 'new.js', versions: [1], first: 10, last: 10,
+    exists: true, missingBackup: false, added: 2, removed: 0, tooLarge: false, truncated: false,
+  });
+});
+
+test('sessionFileDiff: v1 null backup with no `to` is a pure insert against disk', async () => {
+  const changes = { '/p/new.js': { versions: [{ v: 1, backup: null, at: 10 }], first: 10, last: 10 } };
+  const reader = async (p) => (p === '/p/new.js' ? 'a\nb\n' : null);
+  const d = await sessionFileDiff({ sessionId: 's', changes, n: 0, from: undefined, to: undefined, root: '/p', readFile: reader });
+  assert.equal(d.from, 1);
+  assert.equal(d.to, 'disk');
+  assert.equal(d.hunks.length, 1);
+  assert.deepEqual(d.hunks[0].lines, [['+', 'a'], ['+', 'b']]);
+  assert.equal(d.added, 2);
+  assert.equal(d.removed, 0);
+});
+
+test('realPathOf: joins realParentDir with the key basename', () => {
+  assert.equal(realPathOf('/private/tmp/x/y.md', { realParentDir: '/real/dir' }), '/real/dir/y.md');
+  assert.equal(realPathOf('/private/tmp/x/y.md', { realParentDir: '/real/dir/' }), '/real/dir/y.md');
+  assert.equal(realPathOf(null, { realParentDir: '/real/dir' }), null);
+  assert.equal(realPathOf('/private/tmp/x/y.md', { realParentDir: undefined }), null);
+  assert.equal(realPathOf('/private/tmp/x/y.md', null), null);
+});
+
+const { applySessionNote } = require('../lib/config');
+
+test('applySessionNote trims, caps at 2000 chars, and deletes on empty', () => {
+  const a = applySessionNote({}, 's1', '  remember the webhook  ');
+  assert.deepEqual(a, { s1: 'remember the webhook' });
+  const b = applySessionNote(a, 's1', 'x'.repeat(2500));
+  assert.equal(b.s1.length, 2000);
+  const c = applySessionNote(b, 's1', '   ');
+  assert.deepEqual(c, {});
+  assert.deepEqual(applySessionNote(undefined, 's2', 'n'), { s2: 'n' });
+});
+
+test('applySessionNote does not mutate its input', () => {
+  const orig = { s1: 'keep' };
+  const next = applySessionNote(orig, 's2', 'new');
+  assert.deepEqual(orig, { s1: 'keep' });
+  assert.deepEqual(next, { s1: 'keep', s2: 'new' });
+});
+
+const { searchNotes } = require('../lib/search');
+
+test('searchNotes matches note text with project and since filters', () => {
+  const groups = new Map([
+    ['/r/alpha', { path: '/r/alpha', sessions: [{ sessionId: 'a1', lastActivityAt: 1000 }, { sessionId: 'a2', lastActivityAt: 5000 }] }],
+    ['/r/beta', { path: '/r/beta', sessions: [{ sessionId: 'b1', lastActivityAt: 9000 }] }],
+  ]);
+  const notes = { a1: 'Remember the Stripe webhook', a2: 'unrelated', b1: 'stripe keys rotated' };
+  const all = searchNotes('stripe', groups, notes);
+  assert.deepEqual(all.map((r) => r.sessionId), ['b1', 'a1']); // newest first
+  assert.equal(all[1].project, '/r/alpha');
+  assert.deepEqual(searchNotes('stripe project:beta', groups, notes).map((r) => r.sessionId), ['b1']);
+  assert.deepEqual(searchNotes('stripe since:2026-01-01', groups, notes, Date.parse('2026-06-01')).map((r) => r.sessionId), []);
+});
+
+test('searchNotes since: filter keeps only sessions active on or after the cutoff', () => {
+  const groups = new Map([
+    ['/r/alpha', {
+      path: '/r/alpha',
+      sessions: [
+        { sessionId: 'new1', lastActivityAt: Date.parse('2026-09-10') },
+        { sessionId: 'old1', lastActivityAt: Date.parse('2026-08-01') },
+      ],
+    }],
+  ]);
+  const notes = { new1: 'stripe webhook fixed', old1: 'stripe keys rotated' };
+  const now = Date.parse('2026-09-15');
+  assert.deepEqual(
+    searchNotes('stripe since:2026-09-01', groups, notes, now).map((r) => r.sessionId),
+    ['new1']
+  );
+});
+
+test('searchNotes snippet is ellipsis-prefixed for a late match and tolerates non-string note values', () => {
+  const groups = new Map([
+    ['/r/alpha', {
+      path: '/r/alpha',
+      sessions: [
+        { sessionId: 'late', lastActivityAt: 1000 },
+        { sessionId: 'weird', lastActivityAt: 2000 },
+      ],
+    }],
+  ]);
+  const notes = {
+    late: 'x'.repeat(80) + ' stripe webhook secret rotated',
+    weird: { a1: 42 },
+  };
+  const results = searchNotes('stripe', groups, notes);
+  assert.deepEqual(results.map((r) => r.sessionId), ['late']);
+  assert.equal(results[0].snippet.startsWith('…'), true);
+});
+
+const { mergePlugins, mergeMcp, publicServer, redactUrl } = require('../lib/inventory');
+
+const DAY = 86400000;
+const T0 = Date.parse('2026-09-01T00:00:00Z');
+
+test('mergePlugins joins installs with enabled state and marketplace freshness', () => {
+  const installed = {
+    'superpowers@official': [{ scope: 'user', version: 'abc123', installedAt: '2026-08-01T00:00:00Z', lastUpdated: '2026-08-20T00:00:00Z' }],
+    'figma@official': [{ scope: 'user', version: '2.2.111', installedAt: '2026-08-01T00:00:00Z', lastUpdated: '2026-09-01T00:00:00Z' }],
+  };
+  const enabled = { 'superpowers@official': true, 'figma@official': false, 'ghost@official': true };
+  const markets = { official: { lastUpdated: '2026-09-01T00:00:00Z' } };
+  const rows = mergePlugins(installed, enabled, markets, T0);
+  assert.deepEqual(rows.map((r) => [r.id, r.enabled, r.installed, r.stale]), [
+    ['ghost@official', true, false, false],
+    ['superpowers@official', true, true, true],   // marketplace refreshed 12 days after the plugin
+    ['figma@official', false, true, false],
+  ]);
+  assert.equal(rows[1].name, 'superpowers');
+  assert.equal(rows[1].marketplace, 'official');
+  assert.equal(rows[1].version, 'abc123');
+});
+
+test('mergePlugins: within a day of the marketplace refresh is not stale', () => {
+  const rows = mergePlugins(
+    { 'a@m': [{ version: '1', lastUpdated: '2026-09-01T00:00:00Z' }] },
+    {},
+    { m: { lastUpdated: '2026-09-01T12:00:00Z' } },
+    T0
+  );
+  assert.equal(rows[0].stale, false);
+  assert.equal(rows[0].enabled, false); // absent from enabledPlugins = off
+});
+
+test('publicServer strips env and headers and counts args', () => {
+  const out = publicServer({ type: 'stdio', command: 'npx', args: ['-y', 'x'], env: { TOKEN: 'secret' }, headers: { Authorization: 'Bearer s' } });
+  assert.deepEqual(out, { type: 'stdio', command: 'npx', args: 2, url: null });
+  assert.equal(JSON.stringify(out).includes('secret'), false);
+  assert.deepEqual(publicServer({ url: 'https://mcp.example/sse' }), { type: 'http', command: null, args: 0, url: 'https://mcp.example/sse' });
+});
+
+test('publicServer coerces a non-string type to http/stdio based on url', () => {
+  assert.equal(publicServer({ type: 42, url: 'https://mcp.example/sse' }).type, 'http');
+  assert.equal(publicServer({ type: 42 }).type, 'stdio');
+  assert.equal(publicServer({ type: 'sse' }).type, 'sse');
+});
+
+test('redactUrl keeps origin and first path segment only, dropping userinfo/query/rest of path', () => {
+  assert.equal(
+    redactUrl('https://user:sekret@mcp.zapier.com/api/mcp/s/SECRET-TOKEN/mcp?api_key=Q'),
+    'https://mcp.zapier.com/api/…'
+  );
+  assert.equal(redactUrl('https://mcp.sentry.dev/mcp'), 'https://mcp.sentry.dev/mcp');
+  assert.equal(redactUrl('not a url'), null);
+});
+
+test('publicServer never leaks a secret embedded in the url', () => {
+  const out = publicServer({ url: 'https://user:sekret@mcp.zapier.com/api/mcp/s/SECRET-TOKEN/mcp?api_key=Q', env: { T: 's' }, headers: { Authorization: 'x' } });
+  const json = JSON.stringify(out);
+  assert.equal(json.includes('sekret'), false);
+  assert.equal(json.includes('SECRET-TOKEN'), false);
+  assert.equal(json.includes('api_key'), false);
+});
+
+test('mergeMcp unions global, per-project, and .mcp.json servers with projects and auth flags', () => {
+  const rows = mergeMcp({
+    global: { sentry: { url: 'https://s/mcp' } },
+    byProject: { '/r/a': { ruflo: { command: 'ruflo' } }, '/r/b': { ruflo: { command: 'ruflo' } } },
+    mcpJsonByProject: { '/r/b': { playwright: { command: 'npx', args: ['@playwright/mcp'] } } },
+    needsAuth: { sentry: { timestamp: 1 } },
+  });
+  assert.deepEqual(rows.map((r) => [r.name, r.scope, r.projects, r.needsAuth]), [
+    ['playwright', 'mcp.json', ['/r/b'], false],
+    ['ruflo', 'project', ['/r/a', '/r/b'], false],
+    ['sentry', 'global', [], true],
+  ]);
+  assert.equal(rows[0].args, 1);
+});
+
+test('mergeMcp: disabledIn/active reflect per-project disabled servers, global rows always active', () => {
+  const base = {
+    global: { sentry: { url: 'https://s/mcp' } },
+    byProject: { '/r/a': { ruflo: { command: 'ruflo' } }, '/r/b': { ruflo: { command: 'ruflo' } } },
+    mcpJsonByProject: {},
+    needsAuth: {},
+  };
+  const partial = mergeMcp({ ...base, disabledByProject: { '/r/a': new Set(['ruflo']) } });
+  const ruflo1 = partial.find((r) => r.name === 'ruflo');
+  assert.deepEqual(ruflo1.disabledIn, ['/r/a']);
+  assert.equal(ruflo1.active, true);
+  const sentry1 = partial.find((r) => r.name === 'sentry');
+  assert.deepEqual(sentry1.disabledIn, []);
+  assert.equal(sentry1.active, true);
+
+  const both = mergeMcp({ ...base, disabledByProject: { '/r/a': new Set(['ruflo']), '/r/b': new Set(['ruflo']) } });
+  const ruflo2 = both.find((r) => r.name === 'ruflo');
+  assert.deepEqual(ruflo2.disabledIn, ['/r/a', '/r/b']);
+  assert.equal(ruflo2.active, false);
+});
+
+test('mergeMcp: unmatched needsAuth keys become claude.ai rows; matched keys do not duplicate', () => {
+  const rows = mergeMcp({
+    global: { sentry: { url: 'https://s/mcp' } },
+    byProject: {},
+    mcpJsonByProject: {},
+    needsAuth: { sentry: { timestamp: 1 }, 'claude.ai Sentry': { timestamp: 1 } },
+  });
+  assert.equal(rows.length, 2);
+  const extra = rows.find((r) => r.name === 'claude.ai Sentry');
+  assert.equal(extra.scope, 'claude.ai');
+  assert.equal(extra.needsAuth, true);
+  assert.equal(extra.type, 'remote');
+  assert.deepEqual(extra.projects, []);
+  assert.deepEqual(extra.disabledIn, []);
+  assert.equal(extra.active, true);
+
+  const rows2 = mergeMcp({
+    global: {},
+    byProject: {},
+    mcpJsonByProject: {},
+    needsAuth: { 'claude.ai Sentry': { timestamp: 1 } },
+  });
+  assert.equal(rows2.length, 1);
+  assert.equal(rows2[0].name, 'claude.ai Sentry');
+});
+
+test('mergeMcp tolerates a non-object server def without throwing', () => {
+  assert.doesNotThrow(() => {
+    const rows = mergeMcp({ global: { x: null }, byProject: {}, mcpJsonByProject: {}, needsAuth: {} });
+    assert.deepEqual(rows.map((r) => [r.name, r.command, r.args, r.url]), [['x', null, 0, null]]);
+  });
+});
+
+test('mergePlugins: id without @ uses the whole id as name with an empty marketplace', () => {
+  const rows = mergePlugins({ standalone: [{ version: '1' }] }, {}, {});
+  assert.equal(rows[0].name, 'standalone');
+  assert.equal(rows[0].marketplace, '');
+});
+
+test('mergePlugins: unknown marketplace is never stale', () => {
+  const rows = mergePlugins(
+    { 'a@ghost-market': [{ version: '1', lastUpdated: '2026-08-01T00:00:00Z' }] },
+    {}, {}, T0
+  );
+  assert.equal(rows[0].stale, false);
+});
+
+test('mergePlugins: malformed dates parse to null and are never stale', () => {
+  const rows = mergePlugins(
+    { 'a@m': [{ version: '1', lastUpdated: 'nope' }] },
+    {}, { m: { lastUpdated: 'nope' } }, T0
+  );
+  assert.equal(rows[0].lastUpdated, null);
+  assert.equal(rows[0].stale, false);
+});
+
+const { agentStatus, parseAgentMeta, resolveTeam, agentColor, nameFromFile } = require('../lib/teams');
+
+test('agentStatus: active within 120s of the last write, else done', () => {
+  const now = 1_000_000;
+  assert.equal(agentStatus(now - 119_000, now), 'active');
+  assert.equal(agentStatus(now - 120_001, now), 'done');
+  assert.equal(agentStatus(null, now), 'done');
+});
+
+test('nameFromFile parses real agent file names (leading `a` after `agent-`)', () => {
+  assert.equal(nameFromFile('agent-aimpl-task1-3a975d315ff6d0fe.meta.json'), 'impl-task1');
+  assert.equal(nameFromFile('agent-ax-1234567890abcdef.meta.json'), 'x');
+  assert.equal(nameFromFile('agent-aimpl-task3-3a975d315ff6d0fe.jsonl'), 'impl-task3');
+  assert.equal(nameFromFile('agent-a2d1d0cfae35e53f6.jsonl'), null); // unnamed: 16 hex chars, no name prefix
+});
+
+test('parseAgentMeta tolerates missing fields and falls back through description, file name, then hash', () => {
+  assert.deepEqual(
+    parseAgentMeta({ name: 'final-review', agentType: 'final-review', model: 'opus[1m]', teamName: 'swps-v2', color: 'blue' }, 'agent-afinal-review-5c7b5c7b5c7b5c7b.meta.json'),
+    { name: 'final-review', type: 'final-review', model: 'opus[1m]', color: 'blue', team: 'swps-v2', description: null }
+  );
+  assert.deepEqual(
+    parseAgentMeta({}, 'agent-aimpl-task1-3a975d315ff6d0fe.meta.json'),
+    { name: 'impl-task1', type: null, model: null, color: null, team: null, description: null }
+  );
+  assert.deepEqual(
+    parseAgentMeta(null, 'agent-ax-1234567890abcdef.meta.json'),
+    { name: 'x', type: null, model: null, color: null, team: null, description: null }
+  );
+  assert.deepEqual(
+    parseAgentMeta({}, 'agent-aimpl-task3-3a975d315ff6d0fe.jsonl'),
+    { name: 'impl-task3', type: null, model: null, color: null, team: null, description: null }
+  );
+  assert.deepEqual(
+    parseAgentMeta({}, 'agent-a2d1d0cfae35e53f6.jsonl'),
+    { name: '#2d1d0cfa', type: null, model: null, color: null, team: null, description: null }
+  );
+  assert.deepEqual(
+    parseAgentMeta({ description: 'Scoped re-review of T6 fix' }, 'agent-a2d1d0cfae35e53f6.jsonl'),
+    { name: 'Scoped re-review of T6 fix', type: null, model: null, color: null, team: null, description: 'Scoped re-review of T6 fix' }
+  );
+  assert.deepEqual(
+    parseAgentMeta({ name: 'x', description: 'd' }, 'agent-a2d1d0cfae35e53f6.jsonl'),
+    { name: 'x', type: null, model: null, color: null, team: null, description: 'd' }
+  );
+});
+
+test('resolveTeam prefers agent metadata, then the lead session, ignoring auto teams', () => {
+  const teams = [
+    { name: 'swps-v2', leadSessionId: 'lead-1' },
+    { name: 'session-9b5fb426', leadSessionId: 'lead-2' },
+  ];
+  assert.equal(resolveTeam([{ team: 'swps-v2' }], teams, 'other'), 'swps-v2');
+  assert.equal(resolveTeam([{ team: null }], teams, 'lead-1'), 'swps-v2');
+  assert.equal(resolveTeam([{ team: 'session-9b5fb426' }], teams, 'lead-2'), null);
+  assert.equal(resolveTeam([], teams, 'nobody'), null);
+});
+
+test('agentColor maps known names and falls back to muted', () => {
+  assert.equal(agentColor('blue'), '#4a90e2');
+  assert.equal(agentColor('nope'), 'var(--muted)');
+  assert.equal(agentColor(null), 'var(--muted)');
+});
+
+const { overdueWaits } = require('../lib/notify');
+
+test('overdueWaits: only waits past the threshold that have not been nagged', () => {
+  const now = 10_000_000;
+  const since = new Map([['a', now - 61 * 60000], ['b', now - 30 * 60000], ['c', now - 90 * 60000]]);
+  assert.deepEqual(overdueWaits(now, since, 60 * 60000, new Set()), ['c', 'a']);
+  assert.deepEqual(overdueWaits(now, since, 60 * 60000, new Set(['c'])), ['a']);
+});
+
+test('overdueWaits: threshold 0 or less disables the nag', () => {
+  const now = 10_000_000;
+  const since = new Map([['a', now - 5 * 3600000]]);
+  assert.deepEqual(overdueWaits(now, since, 0, new Set()), []);
+  assert.deepEqual(overdueWaits(now, since, -1, new Set()), []);
+});
+
+test('overdueWaits: exactly at the threshold counts as overdue', () => {
+  const now = 10_000_000;
+  assert.deepEqual(overdueWaits(now, new Map([['a', now - 60000]]), 60000, new Set()), ['a']);
+});
+
+const { trackWaits } = require('../lib/notify');
+
+test('trackWaits: first sight of a waiting session sets the clock to now', () => {
+  const waitingSince = new Map();
+  const idleNotified = new Set();
+  trackWaits(new Map([['a', 'waiting']]), waitingSince, idleNotified, 1000);
+  assert.deepEqual([...waitingSince], [['a', 1000]]);
+});
+
+test('trackWaits: a repeated poll keeps the original timestamp', () => {
+  const waitingSince = new Map([['a', 1000]]);
+  const idleNotified = new Set();
+  trackWaits(new Map([['a', 'waiting']]), waitingSince, idleNotified, 5000);
+  assert.deepEqual([...waitingSince], [['a', 1000]]);
+});
+
+test('trackWaits: busy, shell, or unknown status clears both collections', () => {
+  for (const status of ['busy', 'shell', 'unknown']) {
+    const waitingSince = new Map([['a', 1000]]);
+    const idleNotified = new Set(['a']);
+    trackWaits(new Map([['a', status]]), waitingSince, idleNotified, 5000);
+    assert.deepEqual([...waitingSince], []);
+    assert.deepEqual([...idleNotified], []);
+  }
+});
+
+test('trackWaits: a session absent from next clears both collections', () => {
+  const waitingSince = new Map([['a', 1000]]);
+  const idleNotified = new Set(['a']);
+  trackWaits(new Map(), waitingSince, idleNotified, 5000);
+  assert.deepEqual([...waitingSince], []);
+  assert.deepEqual([...idleNotified], []);
+});
+
+test('trackWaits: re-entry after a bounce starts a fresh clock', () => {
+  const waitingSince = new Map([['a', 1000]]);
+  const idleNotified = new Set(['a']);
+  trackWaits(new Map([['a', 'busy']]), waitingSince, idleNotified, 2000);
+  trackWaits(new Map([['a', 'waiting']]), waitingSince, idleNotified, 3000);
+  assert.deepEqual([...waitingSince], [['a', 3000]]);
+  assert.ok(waitingSince.get('a') > 1000);
 });

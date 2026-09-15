@@ -283,8 +283,15 @@
   }
   .dep-task .prompt-ch { color: var(--accent); margin-right: 6px; }
   .dep-task .count { color: var(--faint); margin-left: 6px; }
+  .dep-reason {
+    margin-top: 2px; font-size: 11.5px; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dep-reason .glyph { color: var(--warn); margin-right: 6px; font-weight: 600; }
   .dep-right { display: flex; align-items: center; gap: 10px; justify-self: end; }
   .dep-elapsed { color: var(--faint); font-size: 12px; }
+  .dep-elapsed.overdue { color: var(--warn); font-weight: 600; }
+  .mc-meta.overdue { color: var(--warn); font-weight: 600; }
   .st { font-size: 11.5px; letter-spacing: 0.14em; padding: 3px 10px 2px; }
   .st.st-busy { color: var(--accent); }
   .st.st-waiting {
@@ -330,6 +337,14 @@
   .badge.ahead { color: var(--accent); }
   .badge.err { color: var(--bad); }
   .badge.missing { color: var(--bad); }
+  .note-mark { color: var(--warn); cursor: default; font-size: 12px; flex: none; }
+  #note-editor { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 6px; }
+  #note-editor textarea {
+    width: 100%; min-height: 72px; resize: vertical; box-sizing: border-box;
+    font: 12.5px 'JetBrains Mono', ui-monospace, monospace; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px;
+  }
+  #note-editor .hint { color: var(--faint); font-size: 11px; }
   .card .when { color: var(--faint); font-size: 11px; margin-left: auto; }
   .sessions { list-style: none; padding: 0; margin: 10px 0 0; border-top: 1px solid var(--line); }
   .sessions li {
@@ -597,6 +612,19 @@
   .mc-pane-body { flex: 1; overflow-y: auto; padding: 6px 12px 10px; font-size: 12px; }
   .mc-pane-body .t-turn { margin-top: 8px; }
 
+  .mc-agents .agents { max-height: 35%; overflow-y: auto; }
+  .agents { padding: 4px 12px 6px; border-bottom: 1px solid var(--line); font-size: 11.5px; flex: none; }
+  .agents .team { color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10.5px; margin-bottom: 2px; }
+  .agents .agent { display: flex; align-items: center; gap: 7px; line-height: 1.6; }
+  .agents .swatch { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .agents .aname { color: var(--ink); }
+  .agents .atype { color: var(--faint); }
+  .agents .astatus { margin-left: auto; color: var(--faint); }
+  .agents .astatus.active { color: var(--accent); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+  .agents summary { cursor: pointer; list-style: none; color: var(--faint); font-size: 10.5px; }
+  #drawer .agents { padding: 6px 0 4px; border-bottom: none; }
+
   /* ---------- project detail drawer ---------- */
   #drawer-backdrop {
     position: fixed; inset: 0; z-index: 20;
@@ -674,6 +702,30 @@
 
   .hl-flash { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 
+  /* ---------- session changes panel ---------- */
+  .badge.changes { color: var(--accent); cursor: pointer; }
+  #changes-panel { margin-top: 10px; }
+  .d-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); padding: 4px 0; }
+  .chg-file { border: 1px solid var(--line); border-radius: 3px; margin-top: 8px; background: var(--surface); }
+  .chg-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; font-size: 12.5px; }
+  .chg-head .chg-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+  .chg-head .add { color: var(--accent); }
+  .chg-head .del { color: var(--bad); }
+  .chg-head .badge { flex: none; }
+  .chg-body { border-top: 1px solid var(--line); overflow-x: auto; }
+  .chg-versions { display: flex; gap: 2px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+  .chg-versions button.sel { background: var(--surface2); color: var(--ink); }
+  .diff { font-size: 11.5px; line-height: 1.5; margin: 0; padding: 6px 0; }
+  .diff .hh { color: var(--faint); background: var(--surface2); padding: 2px 12px; margin: 4px 0; }
+  .diff .dl { display: grid; grid-template-columns: 44px 44px 1fr; white-space: pre; }
+  .diff .dl .ln { color: var(--faint); text-align: right; padding-right: 8px; user-select: none; }
+  .diff .dl.add { background: var(--accent-bg); }
+  .diff .dl.add .tx { color: var(--accent); }
+  .diff .dl.del { background: rgba(189, 53, 36, 0.10); }
+  .diff .dl.del .tx { color: var(--bad); }
+  .diff .dl .tx { padding-left: 8px; }
+  .chg-note { color: var(--faint); font-size: 12px; padding: 8px 12px; }
+
   /* ---------- stats drawer ---------- */
   #wk-chart { cursor: pointer; }
   .heat {
@@ -693,6 +745,10 @@
   .stat-table td:last-child, .stat-table td:nth-child(2) { text-align: right; color: var(--muted); }
   .stat-totals { color: var(--muted); font-size: 12px; margin-top: 12px; }
   .stat-totals strong { color: var(--ink); }
+  .inv-chip { padding: 0 6px; border-radius: 2px; font-size: 11px; background: var(--chip-bg); color: var(--muted); }
+  .inv-chip.on { color: var(--accent); }
+  .inv-chip.stale, .inv-chip.auth { color: var(--warn); }
+  .inv-chip.off { color: var(--faint); }
 
   /* ---------- command palette ---------- */
   #palette-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,0.4); }
@@ -856,6 +912,11 @@ function elapsed(ms) {
   return h ? `${h}h ${m}m` : `${m}m`;
 }
 
+function waitLabel(min) {
+  const h = Math.floor(min / 60), m = min % 60;
+  return `waiting ${h ? `${h}h ${m}m` : `${m}m`}`;
+}
+
 // 14-day activity sparkline: thin columns, native tooltips per day.
 function sparkSVG(counts) {
   const w = 84, h = 26, n = counts.length, bw = 4, gap = (w - n * bw) / (n - 1);
@@ -902,6 +963,17 @@ function meter(label, pct, title) {
   </div>`;
 }
 
+// One display line for what a waiting session needs: glyph + 80-char text,
+// plus the untruncated version for tooltips.
+function reasonLine(r) {
+  if (!r || !r.text) return null;
+  const glyph = r.kind === 'question' ? '?' : r.kind === 'permission' ? '🔒' : '';
+  const opts = r.kind === 'question' && r.options && r.options.length ? r.options.join(' / ') : '';
+  const full = opts ? `${r.text} · ${opts}` : r.text;
+  const short = full.length > 80 ? full.slice(0, 79) + '…' : full;
+  return { glyph, short, full, opts, text: r.text };
+}
+
 // Status cell: a split-flap that flips when the status actually changes.
 // keyPrefix keeps rail and mission-control flips independent.
 const prevStatusUI = new Map(); // key -> status
@@ -911,7 +983,8 @@ function statusFlap(s, keyPrefix = '') {
   prevStatusUI.set(key, s.status);
   const flip = changed ? ' flip' : '';
   if (s.status === 'waiting') {
-    return `<span class="flap disp st st-waiting${flip}" title="${esc(s.waitingFor || 'Claude is waiting for your input')}">needs you</span>`;
+    const rl = reasonLine(s.waitingReason);
+    return `<span class="flap disp st st-waiting${flip}" title="${esc(rl ? rl.full : 'Claude is waiting for your input')}">needs you</span>`;
   }
   if (s.status === 'busy') {
     const quiet = s.quietMin
@@ -947,9 +1020,19 @@ function renameBtn(sessionId, title) {
   return `<button class="copy rename-btn" data-rename-session="${esc(sessionId)}" data-title="${esc(title || '')}" title="Rename this session">✎</button>`;
 }
 
+function noteMark(sess) {
+  return sess.note ? `<span class="note-mark" title="${esc(sess.note)}">≡</span>` : '';
+}
+
 function openBtn(sessionId) {
   if (liveIds.has(sessionId)) return '';
   return `<button class="copy open-btn" data-open="${esc(sessionId)}" title="Open this session">open ⬈</button>`;
+}
+
+// "Δ n" — how many files Claude edited in this session. Opens the changes panel.
+function changesChip(sess) {
+  if (!sess.changeCount) return '';
+  return `<span class="badge changes" data-changes="${esc(sess.sessionId)}" title="${sess.changeCount} file${sess.changeCount === 1 ? '' : 's'} edited — click to see the diffs">Δ ${sess.changeCount}</span>`;
 }
 
 function gitBadges(git, missing) {
@@ -974,16 +1057,23 @@ function liveCard(s) {
   const dep = s.startedAt
     ? new Date(s.startedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
     : '';
+  const rl = s.status === 'waiting' ? reasonLine(s.waitingReason) : null;
+  const reason = rl
+    ? `<div class="dep-reason" title="${esc(rl.full)}">${rl.glyph ? `<span class="glyph">${rl.glyph}</span>` : ''}${esc(rl.short)}</div>`
+    : '';
   return `<div class="dep-row ${s.status === 'waiting' ? 'waiting' : ''}">
     <span class="dep-time" title="session started">${esc(dep)}</span>
     <span class="dep-proj disp">${esc(s.projectName)}${s.isWorktree ? ' <span class="badge">worktree</span>' : ''}</span>
     <div class="dep-mid">
       <div class="dep-title" data-session="${esc(s.sessionId)}" title="Click to watch the transcript live">${esc(s.title || '')}</div>
       ${task}
+      ${reason}
     </div>
     <div class="dep-right">
       ${modelChip(s.model)}
-      <span class="dep-elapsed">${elapsed(s.startedAt)}</span>
+      ${s.waitingMin != null
+        ? `<span class="dep-elapsed overdue" title="No reply for ${s.waitingMin} minutes — session started ${elapsed(s.startedAt)} ago">${waitLabel(s.waitingMin)}</span>`
+        : `<span class="dep-elapsed">${elapsed(s.startedAt)}</span>`}
       ${statusFlap(s)}
       ${renameBtn(s.sessionId, s.title)}
       ${copyBtn(s.resumeCommand)}
@@ -996,8 +1086,9 @@ function projectCard(p) {
     ? `<ul class="sessions">${p.sessions.map((sess) => `
         <li>
           <span class="s-title" data-session="${esc(sess.sessionId)}" title="Click to read the transcript">${
-            sess.worktree ? `<span class="wt mono">⎇ ${esc(sess.worktree)}</span>` : ''}${esc(sess.title)}</span>
+            sess.worktree ? `<span class="wt mono">⎇ ${esc(sess.worktree)}</span>` : ''}${esc(sess.title)}</span>${noteMark(sess)}
           ${modelChip(sess.model)}
+          ${changesChip(sess)}
           <span class="s-when">${relTime(sess.lastActivityAt)}</span>
           ${renameBtn(sess.sessionId, sess.title)}
           ${openBtn(sess.sessionId)}
@@ -1028,8 +1119,9 @@ function renderPinned(state) {
   patch(el, `<div class="pin-label">Pinned</div>` + pins.map((p) => `
     <div class="pin-row">
       <span class="star">★</span>
-      <span class="s-title" data-session="${esc(p.sessionId)}" title="Click to read the transcript">${esc(p.title)}</span>
+      <span class="s-title" data-session="${esc(p.sessionId)}" title="Click to read the transcript">${esc(p.title)}</span>${noteMark(p)}
       ${modelChip(p.model)}
+      ${changesChip(p)}
       <span class="s-when">${esc(p.projectName)}</span>
       <span class="s-when">${relTime(p.lastActivityAt)}</span>
       ${renameBtn(p.sessionId, p.title)}
@@ -1098,9 +1190,10 @@ function digestItem(it) {
   return `<div class="digest-item">
     <div class="di-top">
       <span class="di-proj">${esc(it.project)}</span>
-      <span class="di-title" data-session="${esc(it.sessionId)}" title="Click to read the transcript">${it.worktree ? `<span class="wt mono">⎇</span> ` : ''}${esc(it.title)}</span>
+      <span class="di-title" data-session="${esc(it.sessionId)}" title="Click to read the transcript">${it.worktree ? `<span class="wt mono">⎇</span> ` : ''}${esc(it.title)}</span>${noteMark(it)}
       ${running ? '<span class="flap disp st st-busy">running</span>' : ''}
       ${modelChip(it.model)}
+      ${changesChip(it)}
       ${fmtCost(it.estCost) ? `<span class="di-when" title="Estimated list-price value of this session">≈${fmtCost(it.estCost)}</span>` : ''}
       <span class="di-when">${time}</span>
       ${openBtn(it.sessionId)}
@@ -1373,7 +1466,8 @@ function renderDetail(d, name) {
     ? `<ul class="d-sessions">${d.sessions.map((s) => `
         <li>
           <span class="s-title" data-session="${esc(s.sessionId)}" title="Click to read the transcript">${
-            s.worktree ? `<span class="wt mono">⎇ ${esc(s.worktree)}</span> ` : ''}${esc(s.title)}</span>
+            s.worktree ? `<span class="wt mono">⎇ ${esc(s.worktree)}</span> ` : ''}${esc(s.title)}</span>${noteMark(s)}
+          ${changesChip(s)}
           ${fmtCost(s.estCost) ? `<span class="s-when">≈${fmtCost(s.estCost)}</span>` : ''}
           <span class="s-when">${relTime(s.lastActivityAt)}</span>
           ${renameBtn(s.sessionId, s.title)}
@@ -1435,6 +1529,7 @@ async function openDetail(path, name) {
 }
 
 function closeDetail() {
+  closeNoteEditor();
   if (typeof stopFollow === 'function') stopFollow();
   if (typeof stopReplay === 'function') stopReplay(false);
   $('#drawer').hidden = true;
@@ -1449,6 +1544,8 @@ function openDrawerShell(title, sub) {
   $('#d-title').textContent = title;
   $('#d-path').textContent = sub || '';
   $('#d-actions').innerHTML = '';
+  chg.open = false;
+  chg.sid = null;
   $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Loading…</div>';
 }
 
@@ -1484,15 +1581,175 @@ function transcriptHtml(events, st = follow) {
 }
 
 let exportableSession = null;
+function sessionChangeCount(sid) {
+  if (exportableSession?.id === sid) return exportableSession.changeCount || 0;
+  for (const p of lastState?.projects || []) for (const s of p.sessions) if (s.sessionId === sid) return s.changeCount || 0;
+  for (const p of lastState?.pinned || []) if (p.sessionId === sid) return p.changeCount || 0;
+  return 0;
+}
+
 function transcriptStatus() {
   const liveNow = follow.id && liveIds.has(follow.id);
   const sid = exportableSession && exportableSession.id;
   const isPinned = sid && (lastState?.pinned || []).some((p) => p.sessionId === sid);
+  const n = sid ? sessionChangeCount(sid) : 0;
   $('#d-path').textContent = `${follow.projectName} · ${follow.eventCount} events${liveNow ? ' · ● live' : ''}`;
   $('#d-actions').innerHTML = `
+    ${n ? `<button class="copy" data-changes-toggle="${esc(sid)}" title="Files Claude edited in this session">changes Δ ${n}</button>` : ''}
+    ${sid ? `<button class="copy" data-note-toggle title="Attach a note to this session">note${exportableSession.note ? ' ≡' : ''}</button>` : ''}
     <button class="copy" data-export title="Download this transcript as markdown">export ⇩</button>
     ${sid ? `<button class="copy" data-pin="${esc(sid)}" title="${isPinned ? 'Unpin this session' : 'Pin this session to the top of the dashboard'}">${isPinned ? '★ pinned' : '☆ pin'}</button>` : ''}
     ${!liveNow ? '<button class="copy" data-replay title="Play the conversation back turn by turn">replay ▸</button>' : ''}`;
+}
+
+function openNoteEditor() {
+  const existing = $('#note-editor');
+  if (existing) { existing._finish(true); return; }   // toggle-close saves
+  const ed = document.createElement('div');
+  ed.id = 'note-editor';
+  ed.innerHTML = `<textarea maxlength="2000" placeholder="A note for future you — what this session was for, what's left, what to remember.">${esc(exportableSession.note || '')}</textarea>
+    <span class="hint">saves on blur or ⌘⏎ · Esc cancels · empty removes the note</span>`;
+  $('#d-body').prepend(ed);
+  const ta = ed.querySelector('textarea');
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    const value = ta.value;
+    ed.remove();
+    if (save) saveNote(value);
+  };
+  ed._finish = finish;
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
+    else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); finish(true); }
+  });
+  ta.addEventListener('blur', () => finish(true));
+  ta.focus();
+}
+
+function closeNoteEditor() {
+  const ed = $('#note-editor');
+  if (ed && ed._finish) ed._finish(false);
+  else if (ed) ed.remove();
+}
+
+async function saveNote(text) {
+  const sid = exportableSession && exportableSession.id;
+  if (!sid) return;
+  const before = exportableSession.note || '';
+  if (text.trim() === before) return;
+  try {
+    const r = await fetch('/api/session-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: sid, note: text }) });
+    const out = await r.json();
+    if (!out.ok) throw new Error(out.error);
+    exportableSession.note = out.note || null;
+    transcriptStatus();
+    toast(out.note ? 'Note saved' : 'Note removed');
+  } catch {
+    toast("Couldn't save the note");
+    openNoteEditor();
+    const ta = $('#note-editor textarea');
+    if (ta) ta.value = text;
+  }
+}
+
+// ---------- changes panel: files edited, net + per-edit diffs ----------
+const chg = { sid: null, open: false };
+
+function fmtWhen(ms) {
+  return ms ? new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '';
+}
+
+function changeRow(f) {
+  const counts = f.missingBackup ? '<span class="badge">backup gone</span>'
+    : f.tooLarge ? '<span class="badge">too large to diff</span>'
+    : `<span class="add">+${f.added}${f.truncated ? '+' : ''}</span> <span class="del">−${f.removed}${f.truncated ? '+' : ''}</span>`;
+  return `<div class="chg-file" data-n="${f.n}">
+    <div class="chg-head" data-chg-open="${f.n}">
+      <span class="chg-path" title="${esc(f.path)}">${esc(f.rel)}</span>
+      ${f.exists ? '' : '<span class="badge missing">deleted</span>'}
+      ${counts}
+      <span class="s-when">${f.versions.length} version${f.versions.length === 1 ? '' : 's'} · ${fmtWhen(f.last)}</span>
+    </div>
+    <div class="chg-body" hidden></div>
+  </div>`;
+}
+
+function renderChangesPanel(data, error) {
+  const body = $('#d-body');
+  let panel = $('#changes-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'changes-panel';
+    body.prepend(panel);
+  }
+  panel.innerHTML = error
+    ? '<div class="chg-note">Couldn\'t load the changes for this session.</div>'
+    : data.files.length
+      ? `<div class="d-section" style="margin-top:0"><div class="d-section-title">Changes — ${data.files.length} file${data.files.length === 1 ? '' : 's'}</div>${data.files.map(changeRow).join('')}</div>`
+      : '<div class="chg-note">No file edits recorded for this session.</div>';
+  panel._files = data.files;
+  body.scrollTop = 0;
+}
+
+function diffHtml(d) {
+  if (d.missingBackup) return '<div class="chg-note">The backup for this version is gone.</div>';
+  if (d.tooLarge) return '<div class="chg-note">Too large to diff (over 400 KB).</div>';
+  if (!d.hunks.length) return '<div class="chg-note">No differences.</div>';
+  const out = ['<pre class="diff">'];
+  for (const h of d.hunks) {
+    out.push(`<div class="hh">@@ -${h.aStart},${h.aLines} +${h.bStart},${h.bLines} @@</div>`);
+    let a = h.aStart, b = h.bStart;
+    for (const [op, text] of h.lines) {
+      const cls = op === '+' ? 'add' : op === '-' ? 'del' : 'ctx';
+      const la = op === '+' ? '' : a++, lb = op === '-' ? '' : b++;
+      out.push(`<div class="dl ${cls}"><span class="ln">${la}</span><span class="ln">${lb}</span><span class="tx">${esc(op + ' ' + text)}</span></div>`);
+    }
+  }
+  out.push('</pre>');
+  if (d.truncated) out.push('<div class="chg-note">Diff truncated after 2,000 changed lines.</div>');
+  return out.join('');
+}
+
+async function loadFileDiff(sid, n, from, to) {
+  const file = $(`#changes-panel .chg-file[data-n="${n}"]`);
+  if (!file) return;
+  const body = file.querySelector('.chg-body');
+  const f = ($('#changes-panel')._files || [])[n];
+  const versions = f ? f.versions : [];
+  const sel = (a, b) => (String(from) === String(a) && String(to) === String(b)) ? ' sel' : '';
+  const pairs = [[versions[0], 'disk', 'net']].concat(versions.slice(0, -1).map((v, i) => [v, versions[i + 1], `v${v} → v${versions[i + 1]}`]));
+  const buttons = pairs.length > 1
+    ? `<div class="chg-versions">${pairs.map(([a, b, label]) => `<button class="copy${sel(a, b)}" data-chg-diff="${n}" data-from="${a}" data-to="${b}">${esc(label)}</button>`).join('')}</div>`
+    : '';
+  body.hidden = false;
+  body.innerHTML = buttons + '<div class="chg-note">Loading…</div>';
+  try {
+    const r = await fetch(`/api/session-changes?id=${encodeURIComponent(sid)}&file=${n}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (!r.ok) throw new Error();
+    body.innerHTML = buttons + diffHtml(await r.json());
+  } catch {
+    body.innerHTML = buttons + '<div class="chg-note">Couldn\'t load the diff.</div>';
+  }
+}
+
+async function openChanges(sid) {
+  chg.sid = sid;
+  chg.open = true;
+  try {
+    const r = await fetch(`/api/session-changes?id=${encodeURIComponent(sid)}`);
+    if (!r.ok) throw new Error();
+    renderChangesPanel(await r.json());
+  } catch {
+    renderChangesPanel({ files: [] }, true);
+  }
+}
+
+function closeChanges() {
+  chg.open = false;
+  const panel = $('#changes-panel');
+  if (panel) panel.remove();
 }
 
 // ---------- session replay ----------
@@ -1544,14 +1801,15 @@ async function pollFollow() {
   } catch { /* transient; next tick retries */ }
 }
 
-async function openTranscript(sessionId, highlight) {
+async function openTranscript(sessionId, highlight, opts = {}) {
   openDrawerShell('Transcript', sessionId);
   stopFollow();
   try {
     const r = await fetch(`/api/session?id=${encodeURIComponent(sessionId)}`);
     if (!r.ok) throw new Error();
     const t = await r.json();
-    exportableSession = { id: sessionId, title: t.title };
+    exportableSession = { id: sessionId, title: t.title, note: t.note || null };
+    exportableSession.changeCount = t.changeCount || 0;
     follow.id = sessionId;
     follow.offset = t.nextOffset;
     follow.lastDay = '';
@@ -1560,11 +1818,14 @@ async function openTranscript(sessionId, highlight) {
     $('#d-title').textContent = t.title;
     const parts = [];
     if (t.truncatedTurns) parts.push(`<div class="d-empty">… ${t.truncatedTurns} earlier events not shown</div>`);
+    if (t.agents) parts.unshift(agentTree(t.agents));
     parts.push(transcriptHtml(t.events));
     $('#d-body').innerHTML = parts.join('') || '<div class="d-empty">Empty transcript.</div>';
     transcriptStatus();
+    if (opts.changes) await openChanges(sessionId);
     if (liveIds.has(sessionId)) {
-      $('#d-body').scrollTop = $('#d-body').scrollHeight; // start at the newest
+      if (!opts.changes) $('#d-body').scrollTop = $('#d-body').scrollHeight; // start at the newest
+      else $('#changes-panel')?.scrollIntoView({ block: 'start' });
       follow.timer = setInterval(pollFollow, 2500);
     } else {
       follow.id = null;
@@ -1613,7 +1874,29 @@ function mcPaneHead(s) {
     : '';
   return `<span class="mc-proj" data-session="${esc(s.sessionId)}" title="Open the full transcript">${esc(s.projectName)}</span>
     ${modelChip(s.model)}${subs}<span class="spacer"></span>
-    <span class="mc-meta">${elapsed(s.startedAt)}</span>${statusFlap(s, 'mc:')}`;
+    <span class="mc-meta${s.waitingMin != null ? ' overdue' : ''}">${s.waitingMin != null ? waitLabel(s.waitingMin) : elapsed(s.startedAt)}</span>${statusFlap(s, 'mc:')}`;
+}
+
+const AGENT_COLORS = { blue: '#4a90e2', green: 'var(--accent)', red: 'var(--bad)', yellow: 'var(--warn)', purple: '#a86ee0', cyan: '#2fb8c9', orange: '#e08a2f', pink: '#e06ea8', gray: 'var(--faint)', grey: 'var(--faint)' };
+
+function agentTree(agents, { collapsible = false, key = '' } = {}) {
+  if (!agents || !agents.list || !agents.list.length) return '';
+  const colorFor = (c) => {
+    const ck = (c || '').toLowerCase();
+    return Object.hasOwn(AGENT_COLORS, ck) ? AGENT_COLORS[ck] : 'var(--muted)';
+  };
+  const rows = agents.list.map((a) => `<div class="agent">
+      <span class="swatch" style="background:${colorFor(a.color)}"></span>
+      <span class="aname">${esc(a.name)}</span>
+      ${a.type && a.type !== a.name ? `<span class="atype">${esc(a.type)}</span>` : ''}
+      ${a.model ? modelChip(a.model) : ''}
+      <span class="astatus ${a.status}" title="${a.status === 'active' ? 'wrote to its transcript in the last 2 minutes' : 'quiet for two minutes or more (may still be alive)'}">${a.status === 'active' ? '●' : '○'}</span>
+    </div>`).join('');
+  const team = agents.team ? `<div class="team">team · ${esc(agents.team)}</div>` : '';
+  if (!collapsible) return `<div class="agents">${team}${rows}</div>`;
+  const stored = localStorage.getItem(`agentsOpen:${key}`);
+  const open = stored === '1' || (stored !== '0' && agents.list.length <= 8);
+  return `<details class="agents" data-agents-key="${esc(key)}" ${open ? 'open' : ''}><summary>${agents.list.length} agent${agents.list.length === 1 ? '' : 's'}${agents.team ? ` · ${esc(agents.team)}` : ''}</summary>${rows}</details>`;
 }
 
 // Reconcile panes with the latest state: add new sessions, drop ended ones,
@@ -1639,7 +1922,7 @@ function mcSync() {
       const el = document.createElement('div');
       el.className = 'mc-pane';
       el.dataset.sid = s.sessionId;
-      el.innerHTML = '<div class="mc-pane-head"></div><div class="mc-pane-task" hidden></div><div class="mc-pane-body"><div class="d-empty">Loading…</div></div>';
+      el.innerHTML = '<div class="mc-pane-head"></div><div class="mc-pane-task" hidden></div><div class="mc-agents"></div><div class="mc-pane-body"><div class="d-empty">Loading…</div></div>';
       pane = { el, offset: 0, st: { lastDay: '' }, loaded: false };
       mc.panes.set(s.sessionId, pane);
       grid.appendChild(el);
@@ -1648,9 +1931,14 @@ function mcSync() {
     const head = pane.el.querySelector('.mc-pane-head');
     patch(head, mcPaneHead(s));
     const taskEl = pane.el.querySelector('.mc-pane-task');
-    const taskHtml = s.currentTask ? `<span class="prompt-ch">❯</span>${esc(s.currentTask.activeForm)}` : '';
+    const rl = s.status === 'waiting' ? reasonLine(s.waitingReason) : null;
+    const taskHtml = rl
+      ? `<span class="prompt-ch" style="color:var(--warn)">${rl.glyph || '›'}</span>${esc(rl.short)}`
+      : s.currentTask ? `<span class="prompt-ch">❯</span>${esc(s.currentTask.activeForm)}` : '';
     patch(taskEl, taskHtml);
     taskEl.hidden = !taskHtml;
+    const agentsEl = pane.el.querySelector('.mc-agents');
+    patch(agentsEl, agentTree(s.agents, { collapsible: true, key: s.sessionId }));
   }
   for (const [id, pane] of mc.panes) {
     if (!seen.has(id)) { pane.el.remove(); mc.panes.delete(id); }
@@ -1695,6 +1983,10 @@ async function mcPoll() {
 
 $('#mc-btn').addEventListener('click', openMissionControl);
 $('#mc-close').addEventListener('click', closeMissionControl);
+$('#mc-grid').addEventListener('toggle', (e) => {
+  const d = e.target.closest('details[data-agents-key]');
+  if (d) localStorage.setItem(`agentsOpen:${d.dataset.agentsKey}`, d.open ? '1' : '0');
+}, true);
 
 // ---------- search ----------
 async function runSearch(q, deep) {
@@ -1716,7 +2008,7 @@ async function runSearch(q, deep) {
           deepRows ? `<ul class="d-sessions">${deepRows}</ul>` : null, 'No matches inside transcripts.')
       : `<div style="margin:14px 0"><button class="copy" data-deep-search="${esc(q)}">search inside full transcripts →</button>
          <span class="s-when" style="margin-left:8px">reads every conversation, not just your prompts</span></div>`;
-    $('#d-path').textContent = `${d.prompts.length + d.titles.length + (t ? t.matches.length : 0)} results — narrow with project:name or since:7d`;
+    $('#d-path').textContent = `${d.prompts.length + d.titles.length + (t ? t.matches.length : 0) + (d.notes || []).length} results — narrow with project:name or since:7d`;
     const titleRows = d.titles.map((t) => `
       <li>
         <span class="s-title" data-session="${esc(t.sessionId)}" title="Click to read the transcript">${esc(t.title)}</span>
@@ -1729,6 +2021,12 @@ async function runSearch(q, deep) {
         <span class="s-when">${esc(p.projectName)}</span>
         <span class="s-when">${relTime(p.timestamp)}</span>
       </li>`).join('');
+    const noteRows = (d.notes || []).map((n) => `
+      <li>
+        <span class="s-title" data-session="${esc(n.sessionId)}" title="${esc(n.note)}"><span class="note-mark">≡</span> ${esc(n.snippet)}</span>
+        <span class="s-when">${esc(n.projectName)}</span>
+        <span class="s-when">${relTime(n.lastActivityAt)}</span>
+      </li>`).join('');
     const chatRows = (d.chats || []).map((m) => `
       <li>
         <span class="s-title" data-chat="${esc(m.chatId)}" data-hl="${esc(hl)}" title="Click to open at this match">${esc(m.snippet)}</span>
@@ -1738,6 +2036,7 @@ async function runSearch(q, deep) {
     $('#d-body').innerHTML =
       dSection(`Session titles — ${d.titles.length}`, titleRows ? `<ul class="d-sessions">${titleRows}</ul>` : null, 'No title matches.') +
       dSection(`Prompts — ${d.prompts.length}`, promptRows ? `<ul class="d-sessions">${promptRows}</ul>` : null, 'No prompt matches.') +
+      ((d.notes || []).length ? dSection(`Notes — ${d.notes.length}`, `<ul class="d-sessions">${noteRows}</ul>`) : '') +
       deepSection +
       (d.chats ? dSection(`Claude.ai chats — ${d.chats.length}`, chatRows ? `<ul class="d-sessions">${chatRows}</ul>` : null, 'No chat matches.') : '');
   } catch {
@@ -1910,6 +2209,10 @@ async function openSettings() {
           value="${c.weeklyBudget || 0}" placeholder="0">
       </div>
       <div class="set-row">
+        <span class="set-label">Idle reminder<span class="set-sub">minutes a session can sit on "needs you" before one reminder fires; 0 turns it off</span></span>
+        <input type="text" id="set-idle" inputmode="numeric" style="width:70px;text-align:right" value="${c.idleNagMinutes ?? 60}" placeholder="60">
+      </div>
+      <div class="set-row">
         <span class="set-label">Claude.ai chats<span class="set-sub">import conversations.json from your claude.ai export (Settings → Privacy → Export data)</span></span>
         <input type="file" id="set-chats" accept=".json,application/json" style="max-width:210px;font-size:11px;color:var(--muted)">
       </div>
@@ -1917,6 +2220,10 @@ async function openSettings() {
         <span class="set-label">Version ${esc(c.version || '?')}<span class="set-sub">checks GitHub only when you click — never automatically</span></span>
         <span id="set-update-result" style="color:var(--faint);font-size:12px"></span>
         <button class="copy" id="set-update">check for updates</button>
+      </div>
+      <div class="set-row">
+        <span class="set-label">Plugins &amp; MCP servers<span class="set-sub">everything installed or configured, across all projects</span></span>
+        <button class="copy" id="set-inventory">open inventory</button>
       </div>`;
     const diag = (c.errors || []).length
       ? (c.errors || []).map((e) => `<div class="set-row"><span class="set-label mono" style="font-size:11.5px">${esc(e.message)}<span class="set-sub">${relTime(e.at)}</span></span></div>`).join('')
@@ -1959,6 +2266,7 @@ async function openSettings() {
         out.textContent = "couldn't reach GitHub";
       }
     });
+    $('#set-inventory').addEventListener('click', openInventory);
     $('#set-notify').addEventListener('change', (e) =>
       saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
     $('#set-usage').addEventListener('change', (e) =>
@@ -1982,6 +2290,11 @@ async function openSettings() {
       const n = Math.max(0, Math.round(Number(e.target.value) || 0));
       e.target.value = n;
       saveSetting('/api/config', { weeklyBudget: n }, n ? `Weekly budget set to $${n}` : 'Weekly budget off');
+    });
+    $('#set-idle').addEventListener('change', (e) => {
+      const n = Math.max(0, Math.round(Number(e.target.value) || 0));
+      e.target.value = n;
+      saveSetting('/api/config', { idleNagMinutes: n }, n ? `Idle reminder after ${n} min` : 'Idle reminder off');
     });
     $('#set-terminal').addEventListener('change', async (e) => {
       await saveSetting('/api/config', { terminal: e.target.value }, `Sessions will open in ${e.target.selectedOptions[0].text}`);
@@ -2016,7 +2329,12 @@ $('#search').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.value.trim().length >= 2) runSearch(e.target.value.trim());
 });
 
+// Clicking the note toggle button would blur the open textarea before the
+// click fires, saving/closing it before openNoteEditor() can toggle it shut.
+document.addEventListener('mousedown', (e) => { if (e.target.closest('[data-note-toggle]') && $('#note-editor')) e.preventDefault(); });
+
 document.addEventListener('click', async (e) => {
+  if (e.target.closest('[data-note-toggle]')) { openNoteEditor(); return; }
   const pin = e.target.closest('[data-pin]');
   if (pin) {
     const r = await fetch('/api/config', {
@@ -2048,6 +2366,20 @@ document.addEventListener('click', async (e) => {
     }
     return;
   }
+  const cc = e.target.closest('[data-changes]');
+  if (cc) { openTranscript(cc.dataset.changes, null, { changes: true }); return; }
+  const ct = e.target.closest('[data-changes-toggle]');
+  if (ct) { chg.open ? closeChanges() : openChanges(ct.dataset.changesToggle); return; }
+  const co = e.target.closest('[data-chg-open]');
+  if (co) {
+    const bodyEl = co.parentElement.querySelector('.chg-body');
+    if (!bodyEl.hidden) { bodyEl.hidden = true; return; }
+    const f = ($('#changes-panel')._files || [])[Number(co.dataset.chgOpen)];
+    loadFileDiff(chg.sid, Number(co.dataset.chgOpen), f ? f.versions[0] : 1, 'disk');
+    return;
+  }
+  const cd = e.target.closest('[data-chg-diff]');
+  if (cd) { loadFileDiff(chg.sid, Number(cd.dataset.chgDiff), cd.dataset.from, cd.dataset.to); return; }
   const rb = e.target.closest('[data-rename-session]');
   if (rb) { startRename(rb); return; }
   const t = e.target.closest('[data-session]');
@@ -2077,6 +2409,7 @@ document.addEventListener('click', (e) => {
 $('#d-close').addEventListener('click', closeDetail);
 $('#drawer-backdrop').addEventListener('click', closeDetail);
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('#note-editor')) return;
   if (e.key === 'Escape') {
     const drawerOpen = !$('#drawer').hidden;
     closeDetail();
@@ -2254,6 +2587,51 @@ async function openTimeline() {
   }
 }
 
+// ---------- plugin & MCP inventory ----------
+async function openInventory() {
+  openDrawerShell('Plugins & MCP', 'read-only · from ~/.claude and each project');
+  try {
+    const r = await fetch('/api/inventory');
+    if (!r.ok) throw new Error();
+    const inv = await r.json();
+    const s = inv.summary;
+    const headerParts = [`${s.plugins} plugins (${s.enabled} enabled)`, `${s.servers} MCP servers`];
+    if (s.disabled) headerParts.push(`${s.disabled} disabled`);
+    headerParts.push(`${s.needAuth} need auth`);
+    $('#d-path').textContent = headerParts.join(' · ');
+    const stateChip = (p) => !p.installed ? '<span class="inv-chip off" title="enabled in settings but not installed">missing</span>'
+      : p.enabled ? '<span class="inv-chip on">on</span>' : '<span class="inv-chip off">off</span>';
+    const staleChip = (p) => p.stale ? ' <span class="inv-chip stale" title="the marketplace has refreshed since this plugin was updated">stale</span>' : '';
+    const pluginRow = (p) => `<tr>
+      <td>${esc(p.name)}</td>
+      <td class="mono">${esc(p.marketplace)}</td>
+      <td class="mono">${esc(p.version || '—')}</td>
+      <td>${p.lastUpdated ? relTime(p.lastUpdated) : '—'}</td>
+      <td>${stateChip(p)}${staleChip(p)}</td>
+    </tr>`;
+    const on = inv.plugins.filter((p) => p.enabled);
+    const off = inv.plugins.filter((p) => !p.enabled);
+    const table = (rows) => `<table class="stat-table"><tr><td>plugin</td><td>marketplace</td><td>version</td><td>updated</td><td></td></tr>${rows.map(pluginRow).join('')}</table>`;
+    const projName = (path) => (lastState?.projects || []).find((p) => p.path === path)?.name || path.split('/').pop();
+    const mcpRow = (m) => `<tr${m.active ? '' : ' style="opacity:.6"'}>
+      <td>${esc(m.name)}${m.needsAuth ? ' <span class="inv-chip auth" title="Claude Code reports this server needs authentication">needs auth</span>' : ''}${m.disabledIn.length ? ` <span class="inv-chip off" title="disabled in: ${esc(m.disabledIn.map(projName).join(', '))}">off</span>` : ''}</td>
+      <td class="mono">${esc(m.scope)}</td>
+      <td>${m.projects.length ? m.projects.map((p) => `<span class="badge" data-detail="${esc(p)}" style="cursor:pointer">${esc(projName(p))}</span>`).join(' ') : '<span style="color:var(--faint)">all</span>'}</td>
+      <td class="mono">${esc(m.url || [m.command, m.args ? `+${m.args} args` : ''].filter(Boolean).join(' ') || m.type)}</td>
+    </tr>`;
+    const marketRows = inv.marketplaces.map((m) => `<tr><td>${esc(m.name)}</td><td class="mono">${esc(m.repo || '—')}</td><td>${m.lastUpdated ? relTime(m.lastUpdated) : '—'}</td></tr>`).join('');
+    $('#d-body').innerHTML =
+      dSection(`Plugins — ${on.length} enabled`, on.length ? table(on) : null, 'No plugins enabled.') +
+      (off.length ? `<details class="d-section"><summary>show ${off.length} disabled</summary>${table(off)}</details>` : '') +
+      dSection(`MCP servers — ${inv.mcp.length}`, inv.mcp.length
+        ? `<table class="stat-table"><tr><td>server</td><td>scope</td><td>projects</td><td>transport</td></tr>${inv.mcp.map(mcpRow).join('')}</table>`
+        : null, 'No MCP servers configured anywhere.') +
+      dSection(`Marketplaces — ${inv.marketplaces.length}`, marketRows ? `<table class="stat-table">${marketRows}</table>` : null, 'No marketplaces known.');
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load the inventory.</div>';
+  }
+}
+
 // ---------- catch-up bell ----------
 function seenAt() { return Number(localStorage.getItem('claudeDashSeenAt') || 0); }
 
@@ -2370,6 +2748,7 @@ function paletteItems(q) {
   items.push({ k: '⚙', label: 'Settings', hint: 'rename, hide, terminal, notifications', run: openSettings });
   items.push({ k: '▦', label: 'Mission Control', hint: 'every live session at once', run: openMissionControl });
   items.push({ k: '▲', label: 'Stats', hint: 'heatmap · models · hours', run: openStats });
+  items.push({ k: '⌗', label: 'Plugins & MCP', hint: 'what is installed, enabled, needs auth', run: openInventory });
   items.push({ k: '☰', label: 'Your week with Claude', hint: '7-day report · export', run: openWeekReport });
   items.push({ k: '━', label: 'Day timeline', hint: 'last 24h, lane per project', run: openTimeline });
   items.push({ k: '💬', label: 'Claude.ai chats', hint: 'imported from your export', run: openChats });
@@ -2387,7 +2766,7 @@ function paletteItems(q) {
       items.push({ k: '·', label: `${p.name}: ${s.title}`, hint: relTime(s.lastActivityAt), run: () => openTranscript(s.sessionId) });
     }
   }
-  if (!q) return items.filter((i) => ['⚙', '▲', '●', '❯'].includes(i.k)).slice(0, 12);
+  if (!q) return items.filter((i) => ['⚙', '▲', '⌗', '●', '❯'].includes(i.k)).slice(0, 12);
   const needle = q.toLowerCase();
   const scored = [];
   for (const it of items) {

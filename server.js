@@ -9,15 +9,17 @@ const { Collector } = require('./lib/collector');
 const { openSession, openNewSession } = require('./lib/opener');
 const { projectDetail } = require('./lib/detail');
 const { sessionTranscript } = require('./lib/transcript-view');
-const { searchHistory, searchTitles, searchTranscripts, parseSearchQuery } = require('./lib/search');
+const { searchHistory, searchTitles, searchNotes, searchTranscripts, parseSearchQuery } = require('./lib/search');
 const { readChats, saveChats, searchChats } = require('./lib/chats');
 const { sessionTitle } = require('./lib/transcripts');
 const { friendlyName } = require('./lib/names');
 const cfg = require('./lib/config');
 const { isProjectMuted } = require('./lib/notify');
 const { recentCommits, linkCommitsToSessions } = require('./lib/gitlog');
-const { demoState, demoStats, demoSession } = require('./lib/demo');
+const { sessionChangeList, sessionFileDiff } = require('./lib/changes');
+const { demoState, demoStats, demoSession, demoChanges, demoInventory } = require('./lib/demo');
 const { runSelfUpdate } = require('./lib/update');
+const { readInventory } = require('./lib/inventory');
 const DEMO = process.env.CLAUDE_DASH_DEMO === '1';
 
 const PORT = Number(process.env.CLAUDE_DASH_PORT) || 4517;
@@ -106,11 +108,16 @@ const server = http.createServer((req, res) => {
     if (url === '/api/state') return json(res, 200, demoState());
     if (url === '/api/health') return json(res, 200, { ok: true, demo: true, version: VERSION });
     if (url === '/api/stats') return json(res, 200, demoStats());
+    if (url === '/api/inventory') return json(res, 200, demoInventory());
     if (url === '/api/session') {
       const q = new URL(req.url, 'http://localhost').searchParams;
       return json(res, 200, demoSession(q.get('id'), q.get('after')));
     }
-    if (url === '/api/search') return json(res, 200, { q: '', prompts: [], titles: [], transcripts: null });
+    if (url === '/api/session-changes') {
+      const q = new URL(req.url, 'http://localhost').searchParams;
+      return json(res, 200, demoChanges(q.get('id'), q.get('file')));
+    }
+    if (url === '/api/search') return json(res, 200, { q: '', prompts: [], titles: [], notes: [], transcripts: null });
     if (url === '/api/project') {
       return json(res, 200, {
         path: '/demo/acme-storefront', sessions: [], commits: [], muted: false,
@@ -118,7 +125,7 @@ const server = http.createServer((req, res) => {
       });
     }
     if (url === '/api/config' && req.method === 'GET') {
-      return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], themes: cfg.THEMES, version: VERSION, errors: [] });
+      return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, idleNagMinutes: 60, terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], themes: cfg.THEMES, version: VERSION, errors: [] });
     }
     if (url === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
@@ -252,6 +259,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url === '/api/inventory') {
+    readInventory(collector.projectPaths())
+      .then((inv) => json(res, 200, inv))
+      .catch((e) => json(res, 500, { error: String(e.message).slice(0, 200) }));
+    return;
+  }
+
   if (url === '/api/config' && req.method === 'GET') {
     json(res, 200, {
       ...cfg.readConfig(),
@@ -322,6 +336,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url === '/api/session-note' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(res, 403, { ok: false, error: 'forbidden' });
+    readBody(req, res, (payload) => {
+      const id = String(payload.id || '');
+      if (!collector.findSessionFile(id)) return json(res, 404, { ok: false, error: 'unknown session' });
+      const note = cfg.setSessionNote(id, String(payload.note || ''));
+      collector.assemble();
+      json(res, 200, { ok: true, note });
+    });
+    return;
+  }
+
   // Claude.ai chats: imported once from the official export, then read-only.
   if (url === '/api/chats-import' && req.method === 'POST') {
     if (!sameOrigin(req)) return json(res, 403, { ok: false, error: 'forbidden' });
@@ -364,15 +390,41 @@ const server = http.createServer((req, res) => {
       res.end('{"error":"unknown session"}');
       return;
     }
+    const found2 = collector.sessionChanges(id);
+    const changeCount = Object.keys((found2 && found2.changes) || {}).length;
     sessionTranscript(found.file, after)
       .then((t) => {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ sessionId: id, title: found.title, projectName: found.projectName, ...t }));
+        res.end(JSON.stringify({ sessionId: id, title: found.title, projectName: found.projectName, note: found.note || null, changeCount, agents: after ? undefined : (found.agents || null), ...t }));
       })
       .catch((e) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: String(e.message).slice(0, 200) }));
       });
+    return;
+  }
+
+  if (url === '/api/session-changes') {
+    const params = new URL(req.url, 'http://localhost').searchParams;
+    const found = collector.sessionChanges(params.get('id') || '');
+    if (!found) return json(res, 404, { error: 'unknown session' });
+    const fileParam = params.get('file');
+    let work;
+    if (fileParam === null) {
+      work = sessionChangeList(found);
+    } else {
+      const n = Number(fileParam);
+      if (!Number.isInteger(n) || n < 0) return json(res, 404, { error: 'unknown file' });
+      work = sessionFileDiff({
+        ...found,
+        n,
+        from: params.has('from') ? Number(params.get('from')) : undefined,
+        to: params.get('to') === null || params.get('to') === 'disk' ? 'disk' : Number(params.get('to')),
+      }).then((d) => d || Promise.reject(new Error('unknown file')));
+    }
+    work
+      .then((out) => json(res, 200, { sessionId: found.sessionId, ...out }))
+      .catch((e) => json(res, e.message === 'unknown file' ? 404 : 500, { error: String(e.message).slice(0, 200) }));
     return;
   }
 
@@ -390,8 +442,10 @@ const server = http.createServer((req, res) => {
     ])
       .then(([prompts, transcripts]) => {
         const titles = searchTitles(q, collector.raw.transcriptGroups, sessionTitle);
+        const notes = searchNotes(q, collector.raw.transcriptGroups, cfg.readConfig().sessionNotes || {});
         for (const r of prompts) r.projectName = friendlyName(r.project);
         for (const r of titles) r.projectName = friendlyName(r.project);
+        for (const r of notes) r.projectName = friendlyName(r.project);
         if (transcripts) for (const r of transcripts.matches) r.projectName = friendlyName(r.project);
         let chats = null;
         if (deep) {
@@ -400,7 +454,7 @@ const server = http.createServer((req, res) => {
           chats = searchChats(text, pool);
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ q, prompts, titles, transcripts, chats }));
+        res.end(JSON.stringify({ q, prompts, titles, notes, transcripts, chats }));
       })
       .catch((e) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });

@@ -24,10 +24,12 @@ live = s.get("liveSessions", [])
 projects = s.get("projects", [])
 waiting = [l for l in live if l.get("status") == "waiting"]
 quiet = [l for l in live if l.get("quietMin")]
+overdue = [l for l in live if l.get("waitingMin") is not None]
 
 # Menu bar title: attention states change the glyph so it reads at a glance.
 if waiting:
-    print(f"❯ {len(waiting)}⚠ | color=#e0a63a")
+    mark = chr(0x23f3) if overdue else ""
+    print(f"❯ {len(waiting)}⚠{mark} | color=#e0a63a")
 elif quiet:
     print(f"❯ {len(live)}?")
 elif live:
@@ -46,8 +48,10 @@ if live:
     for l in live:
         name = l.get("projectName", "?")
         if l.get("status") == "waiting":
-            what = l.get("waitingFor") or "waiting"
-            print(f"{name} — {what} | color=#e0a63a")
+            what = l.get("waitingFor") or (l.get("waitingReason") or {}).get("text") or "waiting"
+            wm = l.get("waitingMin")
+            tail = f" ({wm//60}h {wm%60}m)" if wm is not None else ""
+            print(f"{name} — {what}{tail} | color=#e0a63a")
         elif l.get("quietMin"):
             qm = l.get("quietMin")
             print(f"{name} — busy, quiet {qm}m | color=#e0a63a")
