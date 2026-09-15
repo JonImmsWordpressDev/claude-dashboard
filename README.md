@@ -1,14 +1,41 @@
 # Claude Dashboard
 
-A local, zero-dependency dashboard for all your [Claude Code](https://claude.com/claude-code) projects. Live sessions pinned at the top — including whether one is waiting on your input — with a card per project below: recent sessions, git status, a 14-day activity sparkline, and one-click resume commands.
+One web page that shows you everything Claude Code is doing on your machine.
 
-Everything is read from local files under `~/.claude`, and it never writes to Claude's data — read-only. No API keys to configure. The only automatic network call is to Anthropic's own usage API for your quota meters, authenticated with the Keychain credentials Claude Code already holds (kept in memory, toggleable in settings). Plain Node.js (which Claude Code already requires), zero npm dependencies. macOS first, Linux supported, Windows experimental.
+Claude Code runs in a terminal. Once you have two or three sessions going, you lose track. Which one is waiting for an answer? What did that session change while you were away? How much has this week cost? Claude Dashboard answers those questions on one screen, updated live, from the files Claude Code already writes to `~/.claude`.
 
-**Requirements:** macOS or Linux (or Windows, experimental — see below), Node.js ≥ 18, Claude Code.
+**What you get**
 
-![Claude Dashboard, dark mode — live sessions, the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
+- A departures board of every running session. When Claude stops to ask you something, the row turns amber and shows the question, so you go straight to the right terminal.
+- A diff of every file Claude edited or created in a session, taken from the backups Claude Code keeps. Read what changed before you commit it.
+- The full transcript of any session, past or present, and a search across every prompt you have ever sent.
+- Cost per project, per model, and per week, estimated from the tokens in your transcripts.
+- A macOS notification the moment a session needs you, and a reminder if you leave it waiting.
 
-*Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`) — the projects are invented.*
+**Why you would want it**
+
+- You stop checking terminals. The board and the notifications tell you when to look.
+- You stop losing sessions. Every session has a resume button that reopens it in the right folder.
+- You see where the time and the money go, per project.
+- It is read-only. It never writes to Claude's files. Nothing leaves your Mac except one optional call to Anthropic's usage API for your quota meters, using the sign-in Claude Code already has.
+- Nothing to configure. No API keys. Plain Node.js, zero npm dependencies, bound to `127.0.0.1` only.
+
+**Who it is for:** anyone who runs Claude Code in more than one terminal.
+
+**Requirements:** macOS or Linux (Windows experimental, see below), Node.js ≥ 18, Claude Code.
+
+![Claude Dashboard, dark mode: three live sessions, two of them waiting with the question shown, plus the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
+
+*Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
+
+**New in 1.10.0**
+
+- The board says what a waiting session needs: the question, the command awaiting permission, or Claude's last line.
+- `Δ n` on every session row, and a changes panel with a diff of every file the session touched.
+- Notes on any session, searchable.
+- A Plugins & MCP inventory: what is installed, enabled, stale, disabled, or needing auth.
+- Agent teams and subagents shown live in Mission Control.
+- An idle reminder when a session has waited on you for an hour.
 
 ## Try it in one command
 
@@ -83,9 +110,9 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app when it's installed — the **Open in** selector in the header names whichever terminal you've configured (auto-detected on first run). The `⧉` button copies the `claude --resume` command instead.
 - **Header meters** — your plan and rate-limit tier (Free/Pro/Max/Enterprise/API, detected from Claude Code's local account cache), live session and weekly usage from Anthropic's usage API via your existing Claude Code sign-in, plus extra-usage spend. Set a **weekly budget** in settings and a third meter tracks estimated spend against it, with one alert each at 75 / 90 / 100%. First run may show one macOS Keychain prompt — click Always Allow.
 
-![Mission Control — every live session tiled side by side, each pane following its own transcript](docs/screenshots/mission-control.png)
+![Mission Control: every live session tiled side by side, each pane following its own transcript, with the waiting reason at the top of each pane and the agent team under the middle one](docs/screenshots/mission-control.png)
 
-![Transcript viewer live-following a running session — prompts, replies as markdown, tool calls as one-liners](docs/screenshots/transcript.png)
+![Transcript viewer live-following a running session: the agent team at the top, then prompts, replies as markdown, and tool calls as one-liners](docs/screenshots/transcript.png)
 
 - **Transcripts** — click any session title (cards, digest, search results, project drawer) to read the conversation: your prompts, Claude's replies rendered as markdown, tool calls as compact one-liners, and away-summaries highlighted. Long sessions show the newest ~1200 events. **Running sessions follow live** — a `● live` badge appears, new turns stream in every few seconds, and the view sticks to the bottom unless you've scrolled up to read.
 - **Search** — the header box searches every prompt you've ever sent plus all session titles (Enter to run, 2+ characters). Narrow with `project:name` or `since:7d` / `since:2026-08-01`. Clicking a prompt result opens the transcript scrolled to the matching turn. If the answer isn't in a prompt, **search inside full transcripts** runs the same query across the conversation bodies — slower, so it's a second click rather than the default.
@@ -96,6 +123,9 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Catch-up** — the `🔔` in the header keeps every notification the server has fired since it started, with an unread count. Useful after a morning away from the desk.
 - **Export** — any transcript downloads as clean markdown via the `export ⇩` button.
 - **Changes** — a `Δ n` chip on any session row counts the files Claude edited. Click it (or `changes` in the transcript header) for the list with `+added −removed` per file and a unified diff of what the session changed, from the pre-edit backup Claude Code keeps to the file as it is on disk now. Files with several checkpoints also offer each step (`v1 → v2`). Read-only: nothing here reverts anything.
+
+![The changes panel: three files the session touched, the first expanded to a unified diff from the pre-edit backup to disk](docs/screenshots/changes.png)
+
 - **Notes** — `note` in the transcript header attaches a free-text note to a session (⌘⏎ saves, empty removes). Rows with a note show `≡`, hover to read it, and notes are searchable from the header box. Stored in `config.json` under `sessionNotes`.
 - **New session** — the `⊕` button on a project card opens a fresh terminal window in that project running `claude`.
 - **Cost trend** — the small bar chart in the header is estimated cost per week for the last 8 weeks (hover for numbers). Costs include subagent tokens.
@@ -106,6 +136,9 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 
 - **Project details** — click any project's name for a slide-over with its full session list, recent git commits, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools). Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
 - **Plugins & MCP** — `⌘K` → Plugins & MCP (or the button in settings) lists every installed plugin with its marketplace, version, on/off state and a `stale` flag when its marketplace was refreshed after the plugin was last updated, plus every MCP server with its scope, the projects that use it, an `off` chip for servers you have disabled in a project, and an amber `needs auth` when Claude Code says so. Read-only; server secrets never reach the browser.
+
+![Plugins & MCP inventory: plugins with on, off, stale and missing states; MCP servers with scope, projects, disabled flags and needs-auth](docs/screenshots/inventory.png)
+
 - **Unpushed work strip** — an amber band listing every repo with uncommitted changes (`●n`) or unpushed commits (`↑n`), sorted by recent activity. Disappears when everything's clean.
 - **Dormant** — projects with no activity for 60+ days, tucked away at the bottom.
 - Worktree sessions (`.claude/worktrees/…`) are folded into their parent project and badged `⎇`.
