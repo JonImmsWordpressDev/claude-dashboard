@@ -603,10 +603,12 @@
   }
   .mc-pane.waiting { box-shadow: inset 0 2px 0 var(--warn); }
   .mc-pane-head {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
     padding: 8px 12px; border-bottom: 1px solid var(--line); flex: none;
     min-width: 0;
   }
+  .mc-pane-head .mc-proj { min-width: 0; flex: 0 1 auto; }
+  .mc-stats { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
   .mc-pane-head .mc-proj {
     font-family: var(--disp-font);
     text-transform: uppercase; letter-spacing: 0.05em;
@@ -2056,9 +2058,13 @@ function mcPaneHead(s) {
     ? `<span class="mc-meta" title="subagent transcripts · their tokens">⑂ ${s.subagents.count}${
         s.subagents.mtok ? ` · ${s.subagents.mtok}M tok` : ''}</span>`
     : '';
+  // Two rows: identity and status on top, the numbers underneath, so a
+  // narrow pane never pushes its status badge into the next one.
+  const stats = `${s.estCost != null ? costChip(s.estCost, { cls: 'mc-meta', assumed: s.assumed, after: s.burnRate ? ` · $${s.burnRate}/h` : '' }) : ''}${contextMeter(s.context)}${s.tools ? `<span class="mc-meta" title="tool calls in this session">${s.tools.total} tools${s.tools.errors ? ` · <span class="failed">${s.tools.errors} failed</span>` : ''}</span>` : ''}${subs}`;
   return `<span class="mc-proj" data-session="${esc(s.sessionId)}" title="Open the full transcript">${esc(s.projectName)}</span>
-    ${modelChip(s.model)}${s.estCost != null ? costChip(s.estCost, { cls: 'mc-meta', assumed: s.assumed, after: s.burnRate ? ` · $${s.burnRate}/h` : '' }) : ''}${subs}${contextMeter(s.context)}${s.tools ? `<span class="mc-meta" title="tool calls in this session">${s.tools.total} tools${s.tools.errors ? ` · <span class="failed">${s.tools.errors} failed</span>` : ''}</span>` : ''}<span class="spacer"></span>
-    <span class="mc-meta${s.waitingMin != null ? ' overdue' : ''}">${s.waitingMin != null ? waitLabel(s.waitingMin) : elapsed(s.startedAt)}</span>${statusFlap(s, 'mc:')}`;
+    ${modelChip(s.model)}<span class="spacer"></span>
+    <span class="mc-meta${s.waitingMin != null ? ' overdue' : ''}">${s.waitingMin != null ? waitLabel(s.waitingMin) : elapsed(s.startedAt)}</span>${statusFlap(s, 'mc:')}${
+    stats ? `<span class="mc-stats">${stats}</span>` : ''}`;
 }
 
 const AGENT_COLORS = { blue: '#4a90e2', green: 'var(--accent)', red: 'var(--bad)', yellow: 'var(--warn)', purple: '#a86ee0', cyan: '#2fb8c9', orange: '#e08a2f', pink: '#e06ea8', gray: 'var(--faint)', grey: 'var(--faint)' };

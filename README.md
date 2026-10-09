@@ -26,7 +26,7 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 **Requirements:** macOS or Linux (Windows experimental, see below), Node.js ≥ 18, Claude Code.
 
-![Claude Dashboard, dark mode: three live sessions, two of them waiting with the question shown, plus the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
+![Claude Dashboard, dark mode: three live sessions with live cost, burn rate and context meters, two of them waiting with the question shown, plus the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
 
@@ -121,9 +121,9 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app when it's installed — the **Open in** selector in the header names whichever terminal you've configured (auto-detected on first run). The `⧉` button copies the `claude --resume` command instead.
 - **Header meters** — your plan and rate-limit tier (Free/Pro/Max/Enterprise/API, detected from Claude Code's local account cache), live session and weekly usage from Anthropic's usage API via your existing Claude Code sign-in, plus extra-usage spend. Set a **weekly budget** in settings and a third meter tracks estimated cost (list-price value on a subscription) against it, with one alert each at 75 / 90 / 100%. First run may show one macOS Keychain prompt — click Always Allow.
 
-![Mission Control: every live session tiled side by side, each pane following its own transcript, with the waiting reason at the top of each pane and the agent team under the middle one](docs/screenshots/mission-control.png)
+![Mission Control: every live session tiled side by side, each pane following its own transcript, with cost, burn rate, context meter and tool counts in each header, the waiting reason under it, and the agent team under the middle one](docs/screenshots/mission-control.png)
 
-![Transcript viewer live-following a running session: the agent team at the top, then prompts, replies as markdown, and tool calls as one-liners](docs/screenshots/transcript.png)
+![Transcript viewer on a running session with the cost panel open: value per model by input, output and cache, the subagent share, cache hit rate, context and tool calls, then the agent team and the conversation](docs/screenshots/transcript.png)
 
 - **Transcripts** — click any session title (cards, digest, search results, project drawer) to read the conversation: your prompts, Claude's replies rendered as markdown, tool calls as compact one-liners, and away-summaries highlighted. Long sessions show the newest ~1200 events. **Running sessions follow live** — a `● live` badge appears, new turns stream in every few seconds, and the view sticks to the bottom unless you've scrolled up to read.
 - **Search** — the header box searches every prompt you've ever sent plus all session titles (Enter to run, 2+ characters). Narrow with `project:name` or `since:7d` / `since:2026-08-01`. Clicking a prompt result opens the transcript scrolled to the matching turn. If the answer isn't in a prompt, **search inside full transcripts** runs the same query across the conversation bodies — slower, so it's a second click rather than the default.
@@ -143,10 +143,13 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Models everywhere** — every session shows which model ran it (live cards, digest, session lists), and the stats view breaks down usage per model and per project.
 - **Claude.ai chats** — import the official export from claude.ai (Settings → Privacy → Export data, then feed `conversations.json` to ⚙ settings here) and your chats become browsable (`⌘K` → Claude.ai chats) and full-text searchable next to your coding sessions. Stored slimmed in your local config dir, gitignored, never uploaded anywhere.
 
-![Stats view: activity heatmap, busiest hours, weekly rhythm, 90-day spend, and per-model cost breakdowns](docs/screenshots/stats.png)
+![Stats view: activity heatmap, busiest hours, weekly rhythm, 90-day spend, per-model costs, the most expensive sessions, and models by project](docs/screenshots/stats.png)
 
 - **Project details** — click any project's name for a slide-over with its full session list, recent git commits, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools), plus the resolved **Toolset** below. Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
 - **Toolset** — inside the project slide-over: what Claude Code would actually use in that project. Every installed plugin, every agent and skill from the project, your user dir, and enabled plugins, and every MCP server that applies, each marked on or off with where it came from and which settings scope decided it, resolved with Claude Code's own precedence (managed › local › project › user, deny beats allow, project agents shadow user agents shadow plugin agents). An amber list at the top flags things worth a look: a plugin enabled but not installed or gone stale, a deny rule naming an agent that no longer exists, a server that needs auth, a settings file that doesn't parse. The `⧉` on a row copies the exact snippet to flip it, aimed at `.claude/settings.local.json`; MCP toggles live in Claude's own registry, so that recipe tells you to run `/mcp` in a session instead (servers from a project's `.mcp.json` also honour the settings keys `enabledMcpjsonServers`, `disabledMcpjsonServers` and `enableAllProjectMcpServers`, and their recipes use those). Buttons at the foot reveal the project's settings files in Finder. Read-only — the dashboard never edits Claude configuration.
+
+![Toolset in the project slide-over: plugins, agents, skills and MCP servers marked on or off with their source and deciding settings scope, an amber warning for a plugin enabled but not installed, and buttons for the project's settings files](docs/screenshots/toolset.png)
+
 - **Plugins & MCP** — `⌘K` → Plugins & MCP (or the button in settings) lists every installed plugin with its marketplace, version, on/off state and a `stale` flag when its marketplace was refreshed after the plugin was last updated, plus every MCP server with its scope, the projects that use it, an `off` chip for servers you have disabled in a project, and an amber `needs auth` when Claude Code says so. Read-only; server secrets never reach the browser.
 
 ![Plugins & MCP inventory: plugins with on, off, stale and missing states; MCP servers with scope, projects, disabled flags and needs-auth](docs/screenshots/inventory.png)
