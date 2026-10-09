@@ -121,24 +121,61 @@ test('newlyWaiting: busy sessions never fire', () => {
   assert.deepEqual(newlyWaiting(prev, next), []);
 });
 
-const { estimateCost, rateFor } = require('../lib/pricing');
+const { estimateCost, rateFor, normalizeModel } = require('../lib/pricing');
 
-test('rateFor matches by prefix with opus-tier fallback', () => {
-  assert.equal(rateFor('claude-fable-5').input, 10);
+test('rateFor matches by prefix, most specific first, with opus-tier fallback', () => {
+  assert.equal(rateFor('claude-fable-5-1').input, 10);
+  assert.equal(rateFor('claude-fable-5-1').cacheRead, 0.25); // not the usual 0.1x
+  assert.equal(rateFor('claude-opus-5-5').input, 4);
+  assert.equal(rateFor('claude-opus-5-5').cacheRead, 0.2);
   assert.equal(rateFor('claude-opus-5').input, 5);
   assert.equal(rateFor('claude-opus-4-8').input, 5);
-  assert.equal(rateFor('claude-sonnet-5').output, 15);
+  assert.equal(rateFor('claude-opus-4-1').input, 15);
+  assert.equal(rateFor('claude-sonnet-5-5').output, 10);
+  assert.equal(rateFor('claude-sonnet-4-6').output, 15);
+  assert.equal(rateFor('claude-haiku-5-5').input, 0.1);
   assert.equal(rateFor('claude-haiku-4-5-20251001').input, 1);
+  assert.equal(rateFor('claude-sonnet-5').cacheRead, 0.2); // default 0.1x input
+  assert.equal(rateFor('claude-sonnet-5').cacheWrite, 2.5); // 1.25x input
+  assert.equal(rateFor('claude-sonnet-5').assumed, false);
   assert.equal(rateFor('some-unknown-model').input, 5);
+  assert.equal(rateFor('some-unknown-model').assumed, true);
+  assert.equal(rateFor('us.anthropic.claude-sonnet-4-6-v1:0').input, 3);
+  assert.equal(rateFor('us.anthropic.claude-sonnet-4-6-v1:0').assumed, false);
+  assert.equal(rateFor('claude-opus-4-5@20251101').input, 5);
+  assert.equal(rateFor('claude-opus-4-5@20251101').assumed, false);
+  assert.equal(rateFor('claude-mythos-5-1').cacheRead, 0.25);
 });
 
-test('estimateCost applies cache read (0.1x) and write (1.25x) multipliers', () => {
-  // 1M of each bucket on fable ($10 in / $50 out):
-  // input 10 + output 50 + cacheRead 1 + cacheCreation 12.5 = 73.5
+test('prototype-named model ids and override keys are treated as plain strings', () => {
+  const { loadPricing: lp, costReport: cr } = require('../lib/pricing');
+  for (const id of ['constructor', '__proto__']) {
+    const r = rateFor(id);
+    assert.equal(r.assumed, true);
+    assert.equal(typeof r.input, 'number');
+  }
+  assert.equal(cr({ constructor: { input: 1e6, output: 0, cacheRead: 0, cacheCreation: 0 } }).usd, 5);
+  const t = lp(JSON.parse('{"overrides":{"__proto__":{"input":1,"output":1,"cacheRead":1,"cacheWrite":1}}}'), null);
+  assert.equal(overrideFor('input', t), null);
+  assert.equal(rateFor('anything', t).assumed, true);
+});
+
+test('normalizeModel maps bare family aliases to the current generation', () => {
+  assert.equal(normalizeModel('sonnet'), 'claude-sonnet-5-5');
+  assert.equal(normalizeModel('opus'), 'claude-opus-5-5');
+  assert.equal(normalizeModel('haiku'), 'claude-haiku-5-5');
+  assert.equal(normalizeModel('claude-opus-5'), 'claude-opus-5');
+  assert.equal(normalizeModel(null), '');
+  assert.equal(rateFor('sonnet').input, 2);
+});
+
+test('estimateCost uses the row cacheRead when set and 1.25x input for cache writes', () => {
+  // 1M of each bucket on fable ($10 in / $50 out / $0.25 cache read):
+  // input 10 + output 50 + cacheRead 0.25 + cacheCreation 12.5 = 72.75
   const usd = estimateCost({
     'claude-fable-5': { input: 1e6, output: 1e6, cacheRead: 1e6, cacheCreation: 1e6 },
   });
-  assert.ok(Math.abs(usd - 73.5) < 1e-9, String(usd));
+  assert.ok(Math.abs(usd - 72.75) < 1e-9, String(usd));
 });
 
 test('estimateCost sums across models and handles empty', () => {
@@ -148,7 +185,84 @@ test('estimateCost sums across models and handles empty', () => {
     'claude-haiku-4-5': { input: 1e6, output: 0, cacheRead: 0, cacheCreation: 0 },
     'claude-sonnet-5': { input: 0, output: 1e6, cacheRead: 0, cacheCreation: 0 },
   });
-  assert.ok(Math.abs(usd - 16) < 1e-9, String(usd)); // $1 + $15
+  assert.ok(Math.abs(usd - 11) < 1e-9, String(usd)); // $1 + $10
+});
+
+// --- modelPricing overrides (same shape as Claude Code's managed setting) ---
+const { loadPricing, overrideFor, costReport } = require('../lib/pricing');
+
+const SONNET_ROW = { input: 2.4, output: 12, cacheRead: 0.24, cacheWrite: 3 };
+
+test('loadPricing: managed wins whole over config; neither gives the empty table', () => {
+  const managed = { multiplier: 0.85, overrides: { 'claude-sonnet-4-6': SONNET_ROW } };
+  const config = { multiplier: 2, overrides: { 'claude-opus-5-5': SONNET_ROW } };
+  const m = loadPricing(managed, config);
+  assert.equal(m.source, 'managed');
+  assert.equal(m.multiplier, 0.85);
+  assert.deepEqual(Object.keys(m.overrides), ['claude-sonnet-4-6']);
+  const c = loadPricing(null, config);
+  assert.equal(c.source, 'config');
+  assert.equal(c.multiplier, 2);
+  const none = loadPricing(undefined, undefined);
+  assert.deepEqual(none, { multiplier: 1, overrides: {}, source: null });
+});
+
+test('loadPricing: bad multiplier falls back to 1, bad rows drop one by one, never throws', () => {
+  const raw = {
+    multiplier: 'lots',
+    overrides: {
+      good: SONNET_ROW,
+      negative: { ...SONNET_ROW, input: -1 },
+      missing: { input: 1, output: 2, cacheRead: 0.1 },
+      huge: { ...SONNET_ROW, output: 10001 },
+      notObject: 'x',
+    },
+  };
+  const p = loadPricing(raw, null);
+  assert.equal(p.multiplier, 1);
+  assert.deepEqual(Object.keys(p.overrides), ['good']);
+  assert.deepEqual(loadPricing({ multiplier: 11 }, null).multiplier, 1);
+  assert.deepEqual(loadPricing({ overrides: 'nope' }, null).overrides, {});
+  assert.deepEqual(loadPricing('garbage', null).source, null);
+});
+
+test('overrideFor: exact key, then bare built-in id, then dated snapshot of a built-in id', () => {
+  const pricing = loadPricing({ overrides: { 'claude-sonnet-4-6': SONNET_ROW, 'gw-alias': { ...SONNET_ROW, input: 9 } } }, null);
+  assert.equal(overrideFor('claude-sonnet-4-6', pricing), pricing.overrides['claude-sonnet-4-6']);
+  assert.equal(overrideFor('claude-sonnet-4-6-20260101', pricing), pricing.overrides['claude-sonnet-4-6']);
+  assert.equal(overrideFor('us.anthropic.claude-sonnet-4-6-v1:0', pricing), pricing.overrides['claude-sonnet-4-6']);
+  assert.equal(overrideFor('claude-sonnet-4-6@20260101', pricing), pricing.overrides['claude-sonnet-4-6']);
+  assert.equal(overrideFor('gw-alias', pricing).input, 9);
+  assert.equal(overrideFor('gw-alias-20260101', pricing), null); // non-built-in keys match exactly only
+  assert.equal(overrideFor('claude-opus-5-5', pricing), null);
+  assert.equal(overrideFor('claude-opus-5-5', null), null);
+});
+
+test('rateFor with pricing: override replaces the bundled row, cacheWrite is absolute, multiplier scales all', () => {
+  const pricing = loadPricing({ multiplier: 0.5, overrides: { 'claude-sonnet-4-6': SONNET_ROW } }, null);
+  const r = rateFor('claude-sonnet-4-6', pricing);
+  assert.deepEqual(r, { input: 1.2, output: 6, cacheRead: 0.12, cacheWrite: 1.5, assumed: false });
+  const bundled = rateFor('claude-opus-5-5', pricing); // no override: bundled x multiplier
+  assert.equal(bundled.input, 2);
+  assert.equal(bundled.cacheWrite, 2.5);
+  const unknown = rateFor('mystery-model', pricing);
+  assert.equal(unknown.assumed, true);
+  const covered = rateFor('mystery-model', loadPricing({ overrides: { 'mystery-model': SONNET_ROW } }, null));
+  assert.equal(covered.assumed, false); // an override clears the flag
+});
+
+test('costReport totals and lists the models that fell through to the default rate', () => {
+  const usage = {
+    'claude-opus-5-5': { input: 1e6, output: 0, cacheRead: 0, cacheCreation: 0 },
+    'mystery-b': { input: 1e6, output: 0, cacheRead: 0, cacheCreation: 0 },
+    'mystery-a': { input: 0, output: 1e6, cacheRead: 0, cacheCreation: 0 },
+  };
+  const r = costReport(usage);
+  assert.ok(Math.abs(r.usd - (4 + 5 + 25)) < 1e-9, String(r.usd));
+  assert.deepEqual(r.assumedModels, ['mystery-a', 'mystery-b']);
+  assert.deepEqual(costReport({}), { usd: 0, assumedModels: [] });
+  assert.deepEqual(costReport(null), { usd: 0, assumedModels: [] });
+  assert.equal(estimateCost(usage), r.usd);
 });
 
 const { matchesPrefix } = require('../lib/ignore');
@@ -256,6 +370,8 @@ test('dailyCostSeries zero-fills and ends today', () => {
   assert.equal(series[1].tokens, 1_000_000);
   assert.equal(series[2].t, new Date(2026, 7, 11).getTime()); // today, local midnight
   assert.equal(series[2].cost, 0);
+  const doubled = dailyCostSeries([days], 3, today, require('../lib/pricing').loadPricing({ multiplier: 2 }, null));
+  assert.equal(doubled[1].cost, 10);
 });
 
 // --- Week × hour heatmap ---
@@ -1114,7 +1230,7 @@ const T0 = Date.parse('2026-09-01T00:00:00Z');
 
 test('mergePlugins joins installs with enabled state and marketplace freshness', () => {
   const installed = {
-    'superpowers@official': [{ scope: 'user', version: 'abc123', installedAt: '2026-08-01T00:00:00Z', lastUpdated: '2026-08-20T00:00:00Z' }],
+    'superpowers@official': [{ scope: 'user', installPath: '/plugins/cache/x/a/1.0.0', version: 'abc123', installedAt: '2026-08-01T00:00:00Z', lastUpdated: '2026-08-20T00:00:00Z' }],
     'figma@official': [{ scope: 'user', version: '2.2.111', installedAt: '2026-08-01T00:00:00Z', lastUpdated: '2026-09-01T00:00:00Z' }],
   };
   const enabled = { 'superpowers@official': true, 'figma@official': false, 'ghost@official': true };
@@ -1128,6 +1244,8 @@ test('mergePlugins joins installs with enabled state and marketplace freshness',
   assert.equal(rows[1].name, 'superpowers');
   assert.equal(rows[1].marketplace, 'official');
   assert.equal(rows[1].version, 'abc123');
+  assert.equal(rows.find((r) => r.installed).installPath, '/plugins/cache/x/a/1.0.0');
+  assert.equal(rows.find((r) => !r.installed).installPath, null);
 });
 
 test('mergePlugins: within a day of the marketplace refresh is not stale', () => {
@@ -1389,4 +1507,569 @@ test('trackWaits: re-entry after a bounce starts a fresh clock', () => {
   trackWaits(new Map([['a', 'waiting']]), waitingSince, idleNotified, 3000);
   assert.deepEqual([...waitingSince], [['a', 3000]]);
   assert.ok(waitingSince.get('a') > 1000);
+});
+
+// --- managed settings location ---
+const { managedSettingsPath } = require('../lib/paths');
+
+test('managedSettingsPath is per platform and never under the home dir', () => {
+  assert.equal(managedSettingsPath('darwin'), '/Library/Application Support/ClaudeCode/managed-settings.json');
+  assert.equal(managedSettingsPath('linux'), '/etc/claude-code/managed-settings.json');
+  assert.equal(managedSettingsPath('win32'), 'C:/Program Files/ClaudeCode/managed-settings.json');
+  assert.ok(!managedSettingsPath('darwin').includes('.claude'));
+});
+
+// --- burn rate, cache hit ratio, top-N ---
+const { burnRate, cacheHitRatio, topByCost } = require('../lib/pricing');
+
+test('burnRate is null until five minutes in, then whole dollars per hour (null under $1/h)', () => {
+  const t0 = 1_700_000_000_000;
+  assert.equal(burnRate(1, t0, t0 + 4 * 60000 + 59000), null);
+  assert.equal(burnRate(1, t0, t0 + 5 * 60000), 12);         // $1 in 5 min = $12/h
+  assert.equal(burnRate(1, t0, t0 + 30 * 60000), 2);         // $1 in 30 min
+  assert.equal(burnRate(0.123, t0, t0 + 60 * 60000), null);  // under $1/h
+  assert.equal(burnRate(1.6, t0, t0 + 60 * 60000), 2);      // whole dollars
+  assert.equal(burnRate(null, t0, t0 + 3600000), null);
+  assert.equal(burnRate(0, t0, t0 + 3600000), null);
+  assert.equal(burnRate(1, null, t0), null);
+  assert.equal(burnRate(1, undefined, t0), null);
+});
+
+test('cacheHitRatio is cache reads over all input-side tokens, null when there are none', () => {
+  assert.equal(cacheHitRatio({ m: { input: 10, output: 500, cacheRead: 90, cacheCreation: 0 } }), 0.9);
+  assert.equal(cacheHitRatio({
+    a: { input: 10, output: 0, cacheRead: 0, cacheCreation: 10 },
+    b: { input: 0, output: 0, cacheRead: 20, cacheCreation: 0 },
+  }), 0.5);
+  assert.equal(cacheHitRatio({ m: { input: 0, output: 999, cacheRead: 0, cacheCreation: 0 } }), null);
+  assert.equal(cacheHitRatio({}), null);
+  assert.equal(cacheHitRatio(null), null);
+});
+
+test('topByCost sorts descending, caps at n, drops sub-cent entries, leaves input untouched', () => {
+  const items = [{ id: 'a', cost: 1 }, { id: 'b', cost: 3 }, { id: 'c', cost: 0.004 }, { id: 'd', cost: 2 }];
+  assert.deepEqual(topByCost(items, 2).map((i) => i.id), ['b', 'd']);
+  assert.deepEqual(topByCost(items).map((i) => i.id), ['b', 'd', 'a']);
+  assert.equal(items[0].id, 'a'); // not sorted in place
+  assert.deepEqual(topByCost([], 5), []);
+});
+
+// --- per-session usage breakdown ---
+const { usageBreakdown } = require('../lib/transcripts');
+
+test('usageBreakdown: per model sorted by cost, subagent share, cache ratio, unpriced flag', () => {
+  const meta = {
+    usage: {
+      'claude-opus-5-5': { input: 1e6, output: 0, cacheRead: 1e6, cacheCreation: 0 },  // 4 + 0.2 = 4.2
+      'mystery': { input: 0, output: 1e5, cacheRead: 0, cacheCreation: 0 },            // 2.5 at fallback
+    },
+    subagentCount: 2,
+    subagentUsage: { 'claude-haiku-5-5': { input: 1e6, output: 0, cacheRead: 0, cacheCreation: 0 } }, // 0.1
+  };
+  const u = usageBreakdown(meta);
+  assert.equal(u.cost, 6.8);
+  assert.equal(u.tokens, 3_100_000);
+  assert.deepEqual(u.byModel.map((r) => r.model), ['claude-opus-5-5', 'mystery', 'claude-haiku-5-5']);
+  assert.equal(u.byModel[0].cost, 4.2);
+  assert.equal(u.byModel[0].cacheRead, 1e6);
+  assert.deepEqual(u.subagents, { count: 2, cost: 0.1, tokens: 1e6 });
+  assert.equal(u.cacheHitRatio, 1e6 / 3e6);
+  assert.deepEqual(u.assumedModels, ['mystery']);
+  assert.equal(u.context, null);
+  assert.equal(u.tools, null);
+  const withCtx = usageBreakdown({ ...meta, context: { tokens: 420_600, model: 'claude-opus-5-5' }, tools: { Bash: { count: 3, errors: 1 } } });
+  assert.deepEqual(withCtx.context, { tokens: 421_000, window: 1_000_000, pct: 42 });
+  assert.deepEqual(withCtx.tools, { total: 3, errors: 1, byName: [{ name: 'Bash', count: 3, errors: 1 }] });
+});
+
+test('usageBreakdown is null for a session with no usage and has no subagents block without them', () => {
+  assert.equal(usageBreakdown({ usage: {} }), null);
+  assert.equal(usageBreakdown({}), null);
+  const u = usageBreakdown({ usage: { 'claude-sonnet-5-5': { input: 1000, output: 0, cacheRead: 0, cacheCreation: 0 } } });
+  assert.equal(u.subagents, null);
+  assert.equal(u.cost, 0);           // $0.002 rounds to 0.00 — the UI shows "$0.00"
+  assert.equal(u.cacheHitRatio, 0);
+});
+
+// --- markdown directory helpers ---
+const fsSync = require('fs');
+const osMod = require('os');
+const pathMod = require('path');
+const { frontmatterDescription, listAgents, listSkills } = require('../lib/mdfiles');
+
+test('frontmatterDescription reads the description line of YAML frontmatter', () => {
+  assert.equal(frontmatterDescription('---\nname: x\ndescription: "Does a thing"\n---\nbody'), 'Does a thing');
+  assert.equal(frontmatterDescription('---\ndescription: plain\n---\n'), 'plain');
+  assert.equal(frontmatterDescription('no frontmatter'), null);
+  assert.equal(frontmatterDescription('---\nname: only\n---\n'), null);
+  assert.equal(frontmatterDescription(''), null);
+});
+
+test('listAgents and listSkills read names and descriptions, tolerate missing dirs', async () => {
+  const tmp = fsSync.mkdtempSync(pathMod.join(osMod.tmpdir(), 'dash-md-'));
+  fsSync.mkdirSync(pathMod.join(tmp, 'agents'));
+  fsSync.writeFileSync(pathMod.join(tmp, 'agents', 'reviewer.md'), '---\ndescription: Reviews code\n---\n');
+  fsSync.writeFileSync(pathMod.join(tmp, 'agents', 'notes.txt'), 'ignored');
+  fsSync.mkdirSync(pathMod.join(tmp, 'skills', 'tdd'), { recursive: true });
+  fsSync.writeFileSync(pathMod.join(tmp, 'skills', 'tdd', 'SKILL.md'), '---\ndescription: Red green\n---\n');
+  fsSync.mkdirSync(pathMod.join(tmp, 'skills', 'empty'));
+  const agents = await listAgents(pathMod.join(tmp, 'agents'));
+  assert.deepEqual(agents, [{ name: 'reviewer', description: 'Reviews code' }]);
+  const skills = await listSkills(pathMod.join(tmp, 'skills'));
+  assert.deepEqual(skills, [{ name: 'tdd', description: 'Red green' }]);
+  assert.deepEqual(await listAgents(pathMod.join(tmp, 'nope')), []);
+  assert.deepEqual(await listSkills(pathMod.join(tmp, 'agents', 'reviewer.md')), []); // a file, not a dir
+  fsSync.rmSync(tmp, { recursive: true, force: true });
+});
+
+// --- toolset resolvers ---
+const { parseDenyRules, resolvePlugins, resolveAgents, resolveSkills, pluginShortName } = require('../lib/toolset');
+
+function scopesOf(partial) {
+  return { managed: null, local: null, project: null, user: null, ...partial };
+}
+
+test('parseDenyRules reads Agent/Task/Skill rules, tolerates spaces, quotes, and junk', () => {
+  const r = parseDenyRules(['Agent(reviewer)', 'Task( planner )', 'Skill("tdd")', "Agent('x')", 'Bash(rm:*)', 42, null]);
+  assert.deepEqual([...r.agents].sort(), ['planner', 'reviewer', 'x']);
+  assert.deepEqual([...r.skills], ['tdd']);
+  assert.deepEqual([...parseDenyRules(undefined).agents], []);
+  assert.deepEqual([...parseDenyRules('Agent(a)').agents], []); // not an array
+});
+
+test('pluginShortName strips the marketplace suffix', () => {
+  assert.equal(pluginShortName('ecc@claude-plugins-official'), 'ecc');
+  assert.equal(pluginShortName('bare'), 'bare');
+});
+
+test('resolvePlugins: local overrides project overrides user; unmentioned installed is off/default; mentioned-not-installed is listed', () => {
+  const rows = [
+    { id: 'a@m', name: 'a', installed: true, enabled: true, stale: false, installPath: '/p/a' },
+    { id: 'b@m', name: 'b', installed: true, enabled: false, stale: true, installPath: '/p/b' },
+    { id: 'c@m', name: 'c', installed: true, enabled: false, stale: false, installPath: '/p/c' },
+  ];
+  const scopes = scopesOf({
+    user: { enabledPlugins: { 'a@m': true, 'b@m': true, 'ghost@m': true } },
+    project: { enabledPlugins: { 'b@m': false } },
+    local: { enabledPlugins: { 'a@m': false } },
+  });
+  const out = resolvePlugins(rows, scopes);
+  const by = Object.fromEntries(out.map((r) => [r.name, r]));
+  assert.equal(by.a.enabled, false); assert.equal(by.a.decidedBy, 'local');
+  assert.equal(by.b.enabled, false); assert.equal(by.b.decidedBy, 'project');
+  assert.equal(by.c.enabled, false); assert.equal(by.c.decidedBy, 'default');
+  assert.equal(by.ghost.enabled, true); assert.equal(by.ghost.decidedBy, 'user'); assert.equal(by.ghost.installed, false);
+  assert.equal(by.a.kind, 'plugin'); assert.equal(by.a.source, 'user'); assert.equal(by.a.pluginId, 'a@m');
+  assert.deepEqual(out.map((r) => r.name), ['ghost', 'a', 'b', 'c']); // enabled first, then name
+});
+
+test('resolvePlugins: a managed scope beats everything; null scopes are fine', () => {
+  const rows = [{ id: 'a@m', name: 'a', installed: true, enabled: true, stale: false, installPath: null }];
+  const out = resolvePlugins(rows, scopesOf({ managed: { enabledPlugins: { 'a@m': false } }, local: { enabledPlugins: { 'a@m': true } } }));
+  assert.equal(out[0].enabled, false); assert.equal(out[0].decidedBy, 'managed');
+  assert.equal(resolvePlugins(rows, scopesOf({}))[0].decidedBy, 'default');
+});
+
+test('resolveAgents: project shadows user shadows plugin; deny in any scope wins at the highest scope', () => {
+  const candidates = [
+    { name: 'reviewer', source: 'plugin', pluginId: 'ecc@m', description: 'plugin one' },
+    { name: 'reviewer', source: 'user', pluginId: null, description: 'user one' },
+    { name: 'reviewer', source: 'project', pluginId: null, description: 'project one' },
+    { name: 'planner', source: 'user', pluginId: null, description: null },
+    { name: 'scout', source: 'plugin', pluginId: 'ecc@m', description: null },
+  ];
+  const scopes = scopesOf({
+    user: { permissions: { deny: ['Agent(planner)'] } },
+    local: { permissions: { deny: ['Task(planner)', 'Agent(ecc:scout)'] } },
+  });
+  const out = resolveAgents(candidates, scopes);
+  const by = Object.fromEntries(out.map((r) => [r.name, r]));
+  assert.equal(by.reviewer.source, 'project');
+  assert.equal(by.reviewer.description, 'project one');
+  assert.deepEqual(by.reviewer.shadowed, ['user', 'plugin:ecc']);
+  assert.equal(by.reviewer.enabled, true); assert.equal(by.reviewer.decidedBy, 'default');
+  assert.equal(by.planner.enabled, false); assert.equal(by.planner.decidedBy, 'local'); // highest scope that denies
+  assert.equal(by.scout.enabled, false); assert.equal(by.scout.decidedBy, 'local'); // namespaced match
+  assert.equal(by.scout.pluginId, 'ecc@m'); assert.equal(by.scout.source, 'plugin');
+  assert.deepEqual(out.map((r) => r.name), ['reviewer', 'planner', 'scout']); // enabled first, then name
+});
+
+test('resolveAgents: a deny on a shadowed name disables the winner, never falls back to the loser', () => {
+  const out = resolveAgents([
+    { name: 'x', source: 'project', pluginId: null, description: null },
+    { name: 'x', source: 'plugin', pluginId: 'p@m', description: null },
+  ], scopesOf({ project: { permissions: { deny: ['Agent(x)'] } } }));
+  assert.equal(out.length, 1);
+  assert.equal(out[0].source, 'project'); assert.equal(out[0].enabled, false); assert.deepEqual(out[0].shadowed, ['plugin:p']);
+});
+
+test('resolveSkills: overrides by highest scope, deny rules, plugin skills follow the plugin', () => {
+  const candidates = [
+    { name: 'tdd', source: 'project', pluginId: null, description: null },
+    { name: 'brainstorm', source: 'user', pluginId: null, description: null },
+    { name: 'quiet', source: 'user', pluginId: null, description: null },
+    { name: 'denied', source: 'user', pluginId: null, description: null },
+    { name: 'plug-on', source: 'plugin', pluginId: 'on@m', description: null },
+    { name: 'plug-off', source: 'plugin', pluginId: 'off@m', description: null },
+  ];
+  const scopes = scopesOf({
+    user: { skillOverrides: { tdd: 'off', brainstorm: 'name-only' } },
+    local: { skillOverrides: { tdd: 'on' }, permissions: { deny: ['Skill(denied)'] } },
+  });
+  const pluginRows = [
+    { name: 'on', pluginId: 'on@m', enabled: true }, { name: 'off', pluginId: 'off@m', enabled: false },
+  ];
+  const out = resolveSkills(candidates, scopes, pluginRows);
+  const by = Object.fromEntries(out.map((r) => [r.name, r]));
+  assert.equal(by.tdd.enabled, true); assert.equal(by.tdd.decidedBy, 'local'); assert.equal(by.tdd.mode, 'on');
+  assert.equal(by.brainstorm.enabled, true); assert.equal(by.brainstorm.mode, 'name-only'); assert.equal(by.brainstorm.decidedBy, 'user');
+  assert.equal(by.quiet.enabled, true); assert.equal(by.quiet.decidedBy, 'default'); assert.equal(by.quiet.mode, null);
+  assert.equal(by.denied.enabled, false); assert.equal(by.denied.decidedBy, 'local');
+  assert.equal(by['plug-on'].enabled, true); assert.equal(by['plug-on'].decidedBy, 'plugin');
+  assert.equal(by['plug-off'].enabled, false); assert.equal(by['plug-off'].decidedBy, 'plugin');
+  assert.equal(by.tdd.kind, 'skill');
+});
+
+test('resolveSkills: a Skill deny disables a plugin skill by bare or namespaced name', () => {
+  const out = resolveSkills([
+    { name: 'a', source: 'plugin', pluginId: 'p@m' },
+    { name: 'b', source: 'plugin', pluginId: 'p@m' },
+  ], { managed: null, local: { permissions: { deny: ['Skill(a)', 'Skill(p:b)'] } }, project: null, user: null },
+  [{ pluginId: 'p@m', enabled: true }]);
+  assert.equal(out.length, 2);
+  for (const r of out) { assert.equal(r.enabled, false); assert.equal(r.decidedBy, 'local'); }
+});
+
+// --- toolset: mcp, audit, recipes ---
+const { resolveMcp, auditToolset, recipeFor } = require('../lib/toolset');
+
+test('resolveMcp keeps global rows and rows used by this project, with disabledIn applied', () => {
+  const root = '/Users/me/proj';
+  const mcp = [
+    { name: 'gh', scope: 'global', projects: [], disabledIn: [], needsAuth: false, active: true },
+    { name: 'db', scope: 'project', projects: [root], disabledIn: [root], needsAuth: true, active: false },
+    { name: 'other', scope: 'project', projects: ['/Users/me/other'], disabledIn: [], needsAuth: false, active: true },
+    { name: 'shared', scope: 'mcp.json', projects: ['/users/ME/PROJ'], disabledIn: [], needsAuth: false, active: true },
+  ];
+  const out = resolveMcp(mcp, root);
+  assert.deepEqual(out.map((r) => r.name), ['gh', 'shared', 'db']); // enabled first, then name
+  const by = Object.fromEntries(out.map((r) => [r.name, r]));
+  assert.equal(by.gh.enabled, true); assert.equal(by.gh.source, 'global'); assert.equal(by.gh.decidedBy, 'default');
+  assert.equal(by.db.enabled, false); assert.equal(by.db.decidedBy, 'claude.json'); assert.equal(by.db.needsAuth, true);
+  assert.equal(by.shared.source, 'mcp.json'); assert.equal(by.db.kind, 'mcp');
+});
+
+test('auditToolset produces one finding per condition', () => {
+  const ts = {
+    plugins: [
+      { name: 'ghost', kind: 'plugin', enabled: true, installed: false, stale: false, decidedBy: 'user' },
+      { name: 'old', kind: 'plugin', enabled: true, installed: true, stale: true, decidedBy: 'user' },
+      { name: 'fine', kind: 'plugin', enabled: true, installed: true, stale: false, decidedBy: 'user' },
+    ],
+    agents: [
+      { name: 'r', kind: 'agent', enabled: true, source: 'project', shadowed: ['plugin:ecc'], decidedBy: 'default' },
+    ],
+    skills: [],
+    mcp: [{ name: 'gh', kind: 'mcp', enabled: true, needsAuth: true }],
+    denyUnmatched: { agents: ['vanished'], skills: [] },
+  };
+  const f = auditToolset(ts, ['.claude/settings.local.json']);
+  const texts = f.map((x) => x.text);
+  assert.ok(texts.some((t) => t.includes('ghost') && t.includes('not installed')), texts);
+  assert.ok(texts.some((t) => t.includes('old') && t.includes('stale')), texts);
+  assert.ok(texts.some((t) => t.includes('gh') && t.includes('needs auth')), texts);
+  assert.ok(texts.some((t) => t.includes('vanished') && t.includes('deny')), texts);
+  assert.ok(texts.some((t) => t.includes('r') && t.includes('shadows')), texts);
+  assert.ok(texts.some((t) => t.includes('settings.local.json') && t.includes('unreadable')), texts);
+  assert.equal(f.filter((x) => x.level === 'warn').length, 5);
+  assert.equal(f.find((x) => x.text.includes('shadows')).level, 'info');
+  assert.deepEqual(auditToolset({ plugins: [], agents: [], skills: [], mcp: [], denyUnmatched: { agents: [], skills: [] } }), []);
+});
+
+test('recipeFor gives a settings.local.json snippet for plugins, agents, skills and a sentence for MCP', () => {
+  const root = '/p';
+  const plugOn = recipeFor({ kind: 'plugin', pluginId: 'ecc@m', enabled: true }, root);
+  assert.equal(plugOn.target, '.claude/settings.local.json');
+  assert.deepEqual(JSON.parse(plugOn.text), { enabledPlugins: { 'ecc@m': false } });
+  assert.ok(plugOn.label.toLowerCase().includes('disable'));
+  const plugOff = recipeFor({ kind: 'plugin', pluginId: 'ecc@m', enabled: false }, root);
+  assert.deepEqual(JSON.parse(plugOff.text), { enabledPlugins: { 'ecc@m': true } });
+  const agentOn = recipeFor({ kind: 'agent', name: 'reviewer', source: 'plugin', pluginId: 'ecc@m', enabled: true }, root);
+  assert.deepEqual(JSON.parse(agentOn.text), { permissions: { deny: ['Agent(ecc:reviewer)'] } });
+  const agentOff = recipeFor({ kind: 'agent', name: 'planner', source: 'user', pluginId: null, enabled: false, decidedBy: 'local' }, root);
+  assert.ok(agentOff.text.includes('Agent(planner)') && agentOff.text.includes('.claude/settings.local.json'), agentOff.text);
+  assert.equal(agentOff.target, '.claude/settings.local.json');
+  const agentOffUser = recipeFor({ kind: 'agent', name: 'planner', source: 'user', pluginId: null, enabled: false, decidedBy: 'user' }, root);
+  assert.ok(agentOffUser.text.includes('user settings'), agentOffUser.text);
+  const skill = recipeFor({ kind: 'skill', name: 'tdd', source: 'user', enabled: true }, root);
+  assert.deepEqual(JSON.parse(skill.text), { skillOverrides: { tdd: 'off' } });
+  const pskill = recipeFor({ kind: 'skill', name: 'x', source: 'plugin', pluginId: 'ecc@m', enabled: true }, root);
+  assert.deepEqual(JSON.parse(pskill.text), { enabledPlugins: { 'ecc@m': false } }); // plugin skills flip via the plugin
+  const pskillDenyLocal = recipeFor({ kind: 'skill', name: 'x', source: 'plugin', pluginId: 'ecc@m', enabled: false, decidedBy: 'local' }, root);
+  assert.ok(pskillDenyLocal.text.includes('Skill(ecc:x)') && pskillDenyLocal.text.includes('.claude/settings.local.json'), pskillDenyLocal.text);
+  const pskillDenyUser = recipeFor({ kind: 'skill', name: 'x', source: 'plugin', pluginId: 'ecc@m', enabled: false, decidedBy: 'user' }, root);
+  assert.ok(pskillDenyUser.text.includes('user settings'), pskillDenyUser.text);
+  const mcp = recipeFor({ kind: 'mcp', name: 'gh', source: 'global', enabled: true }, root);
+  assert.ok(mcp.text.startsWith('Run /mcp inside a Claude session in this project and toggle gh'), mcp.text);
+  assert.equal(mcp.target, 'a Claude session in this project');
+  const mj = recipeFor({ kind: 'mcp', name: 'shared', source: 'mcp.json', enabled: true }, root);
+  assert.deepEqual(JSON.parse(mj.text), { disabledMcpjsonServers: ['shared'] });
+});
+
+// --- toolset readers (with injected I/O) ---
+const { readScopes, collectCandidates, denyUnmatched } = require('../lib/toolset');
+
+test('readScopes maps the four files to scopes, flags invalid JSON, treats missing as null', async () => {
+  const seen = [];
+  const reader = async (abs) => {
+    seen.push(abs);
+    if (abs.endsWith('managed-settings.json')) return 'missing';
+    if (abs.endsWith('/.claude/settings.local.json')) return 'invalid';
+    if (abs.endsWith('/.claude/settings.json') && abs.startsWith('/p/')) return { enabledPlugins: { 'a@m': true } };
+    return { permissions: { deny: ['Agent(x)'] } }; // user
+  };
+  const r = await readScopes('/p', reader);
+  assert.equal(r.scopes.managed, null);
+  assert.equal(r.scopes.local, null);
+  assert.deepEqual(r.scopes.project, { enabledPlugins: { 'a@m': true } });
+  assert.deepEqual(r.scopes.user, { permissions: { deny: ['Agent(x)'] } });
+  assert.deepEqual(r.files, { managed: false, local: true, project: true, user: true });
+  assert.deepEqual(r.unreadable, ['.claude/settings.local.json']);
+  assert.ok(seen.some((p) => p === '/p/.claude/settings.local.json'));
+  assert.ok(seen.some((p) => p === '/p/.claude/settings.json'));
+});
+
+test('readScopes survives a reader that throws', async () => {
+  const r = await readScopes('/p', async () => { throw new Error('boom'); });
+  assert.deepEqual(r.scopes, { managed: null, local: null, project: null, user: null });
+  assert.equal(r.unreadable.length, 0);
+});
+
+test('collectCandidates gathers project, user, and enabled-plugin agents and skills; tolerates failing listers', async () => {
+  const calls = [];
+  const listers = {
+    listAgents: async (dir) => {
+      calls.push(dir);
+      if (dir === '/p/.claude/agents') return [{ name: 'local-agent', description: 'd' }];
+      if (dir.endsWith('/.claude/agents')) return [{ name: 'user-agent', description: null }];
+      if (dir === '/plug/on/agents') return [{ name: 'plug-agent', description: null }];
+      throw new Error('unreadable');
+    },
+    listSkills: async (dir) => {
+      if (dir === '/p/.claude/skills') return [{ name: 'local-skill', description: null }];
+      if (dir === '/plug/on/skills') return [{ name: 'plug-skill', description: null }];
+      return [];
+    },
+  };
+  const pluginRows = [
+    { pluginId: 'on@m', enabled: true, installed: true, installPath: '/plug/on' },
+    { pluginId: 'off@m', enabled: false, installed: true, installPath: '/plug/off' },
+    { pluginId: 'nopath@m', enabled: true, installed: true, installPath: null },
+  ];
+  const c = await collectCandidates('/p', pluginRows, listers);
+  assert.deepEqual(c.agents.map((a) => `${a.source}:${a.name}`).sort(), ['plugin:plug-agent', 'project:local-agent', 'user:user-agent']);
+  assert.equal(c.agents.find((a) => a.source === 'plugin').pluginId, 'on@m');
+  assert.deepEqual(c.skills.map((s) => `${s.source}:${s.name}`).sort(), ['plugin:plug-skill', 'project:local-skill']);
+  assert.ok(!calls.includes('/plug/off/agents'), 'disabled plugins are not listed');
+  assert.ok(!calls.some((d) => d.startsWith('null')), 'missing installPath is skipped');
+});
+
+test('denyUnmatched lists deny-rule names that no row defines', () => {
+  const scopes = { managed: null, local: { permissions: { deny: ['Agent(ghost)', 'Agent(ecc:scout)', 'Skill(none)'] } }, project: null, user: { permissions: { deny: ['Agent(real)'] } } };
+  const agents = [{ name: 'real', source: 'user', pluginId: null }, { name: 'scout', source: 'plugin', pluginId: 'ecc@m' }];
+  const skills = [{ name: 'tdd', source: 'user' }];
+  assert.deepEqual(denyUnmatched(scopes, agents, skills), { agents: ['ghost'], skills: ['none'] });
+});
+
+// --- reveal a settings file ---
+const { revealTarget, revealCommand } = require('../lib/opener');
+
+test('revealTarget maps the three allowed keys and rejects everything else', () => {
+  assert.equal(revealTarget('local'), '.claude/settings.local.json');
+  assert.equal(revealTarget('project'), '.claude/settings.json');
+  assert.equal(revealTarget('mcpJson'), '.mcp.json');
+  assert.equal(revealTarget('../../etc/passwd'), null);
+  assert.equal(revealTarget(''), null);
+  assert.equal(revealTarget(undefined), null);
+  assert.equal(revealTarget('LOCAL'), null);
+  assert.equal(revealTarget('constructor'), null);
+});
+
+test('revealCommand is per platform and never interpolates into a shell string', () => {
+  assert.deepEqual(revealCommand('darwin', '/p/.claude/settings.json'), ['open', ['-R', '/p/.claude/settings.json']]);
+  assert.deepEqual(revealCommand('win32', 'C:/p/.mcp.json'), ['explorer', ['/select,C:/p/.mcp.json']]);
+  assert.deepEqual(revealCommand('linux', '/p/.claude/settings.json'), ['xdg-open', ['/p/.claude']]);
+  const [, args] = revealCommand('darwin', "/p/it's; rm -rf /");
+  assert.equal(args[1], "/p/it's; rm -rf /"); // passed as one argv entry, untouched
+});
+
+// --- toolset: final-review fixes ---
+{
+  const tsm = require('../lib/toolset');
+
+  test('denyUnmatched honours namespaced Skill(plugin:name) rules for plugin skills', () => {
+    const scopes = { local: { permissions: { deny: ['Skill(p:b)'] } } };
+    const out = tsm.denyUnmatched(scopes, [], [{ name: 'b', source: 'plugin', pluginId: 'p@m' }]);
+    assert.deepEqual(out.skills, []);
+  });
+
+  test('recipeFor: a deny-disabled user skill is told to remove the deny entry', () => {
+    const scopes = { local: { permissions: { deny: ['Skill(x)'] } } };
+    const [row] = tsm.resolveSkills([{ name: 'x', source: 'user' }], scopes, []);
+    assert.equal(row.enabled, false);
+    assert.equal(row.deniedBy, 'local');
+    const rec = tsm.recipeFor(row, '/p');
+    assert.ok(rec.text.includes('Skill(x)') && rec.text.includes('.claude/settings.local.json'), rec.text);
+  });
+
+  test('recipeFor: an override-off skill still gets the skillOverrides "on" snippet', () => {
+    const scopes = { local: { skillOverrides: { x: 'off' } } };
+    const [row] = tsm.resolveSkills([{ name: 'x', source: 'user' }], scopes, []);
+    assert.equal(row.enabled, false);
+    assert.equal(row.deniedBy, null);
+    const rec = tsm.recipeFor(row, '/p');
+    assert.deepEqual(JSON.parse(rec.text), { skillOverrides: { x: 'on' } });
+  });
+
+  const mroot = '/Users/me/proj';
+  const mrow = (disabledIn = []) => [{ name: 'srv', scope: 'mcp.json', projects: [mroot], disabledIn, needsAuth: false }];
+
+  test('resolveMcp: a settings veto turns an .mcp.json server off, and the recipe removes the veto', () => {
+    const [r] = tsm.resolveMcp(mrow(), mroot, { local: { disabledMcpjsonServers: ['srv'] } });
+    assert.equal(r.enabled, false);
+    assert.equal(r.decidedBy, 'local');
+    const rec = tsm.recipeFor(r, mroot);
+    assert.equal(rec.text, 'Remove "srv" from disabledMcpjsonServers in .claude/settings.local.json.');
+  });
+
+  test('resolveMcp: enabledMcpjsonServers approves an .mcp.json server disabled in claude.json', () => {
+    const [r] = tsm.resolveMcp(mrow([mroot]), mroot, { project: { enabledMcpjsonServers: ['srv'] } });
+    assert.equal(r.enabled, true);
+    assert.equal(r.decidedBy, 'project');
+  });
+
+  test('resolveMcp: enableAllProjectMcpServers approves', () => {
+    const [r] = tsm.resolveMcp(mrow([mroot]), mroot, { user: { enableAllProjectMcpServers: true } });
+    assert.equal(r.enabled, true);
+    assert.equal(r.decidedBy, 'user');
+  });
+
+  test('resolveMcp: a veto beats an approval at a lower scope, and non-arrays are ignored', () => {
+    const scopes = { local: { disabledMcpjsonServers: ['srv'] }, user: { enabledMcpjsonServers: ['srv'] } };
+    const [r] = tsm.resolveMcp(mrow(), mroot, scopes);
+    assert.equal(r.enabled, false);
+    assert.equal(r.decidedBy, 'local');
+    const [q] = tsm.resolveMcp(mrow(), mroot, { local: { disabledMcpjsonServers: 'srv' } });
+    assert.equal(q.enabled, true);
+  });
+
+  test('resolveMcp: omitting scopes keeps the disabledIn behaviour', () => {
+    const [r] = tsm.resolveMcp(mrow([mroot]), mroot);
+    assert.equal(r.enabled, false);
+    assert.equal(r.decidedBy, 'claude.json');
+  });
+}
+
+// --- context window sizes ---
+const { contextWindow } = require('../lib/pricing');
+
+test('contextWindow: 1M for current families, 200K for Haiku 4.5, older and unknown', () => {
+  for (const id of ['claude-fable-5-1', 'claude-mythos-5-1', 'claude-opus-5-5', 'claude-opus-5', 'claude-opus-4-8',
+    'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-5-5', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-5-5',
+    'opus', 'sonnet', 'haiku', 'us.anthropic.claude-sonnet-4-6-v1:0', 'claude-opus-4-8@20260101']) {
+    assert.equal(contextWindow(id), 1_000_000, id);
+  }
+  for (const id of ['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-5', 'claude-opus-4-5', 'claude-3-5-haiku', 'mystery', '', null, undefined]) {
+    assert.equal(contextWindow(id), 200_000, String(id));
+  }
+});
+
+// --- scanner: context size and tool counts ---
+const { TOOL_RING } = require('../lib/transcripts');
+
+function toolUseLine({ id, model = 'claude-opus-5-5', usage, blocks }) {
+  return JSON.stringify({
+    type: 'assistant',
+    timestamp: AUG10,
+    message: { id, model, usage, content: blocks },
+  });
+}
+function toolResultLine(results) {
+  return JSON.stringify({ type: 'user', message: { role: 'user', content: results } });
+}
+const U = { input_tokens: 10, cache_read_input_tokens: 400_000, cache_creation_input_tokens: 2_000, output_tokens: 50 };
+
+test('scanLine records the prompt size of the latest assistant message once per message id', () => {
+  const scan = freshScan();
+  scanLine(toolUseLine({ id: 'm1', usage: U, blocks: [{ type: 'text', text: 'hi' }] }), scan);
+  assert.deepEqual(scan.lastContext && { tokens: scan.lastContext.tokens, model: scan.lastContext.model },
+    { tokens: 402_010, model: 'claude-opus-5-5' });
+  // a second record of the same message (next content block) does not move it or double count usage
+  scanLine(toolUseLine({ id: 'm1', usage: U, blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] }), scan);
+  assert.equal(scan.lastContext.tokens, 402_010);
+  assert.equal(scan.usage['claude-opus-5-5'].cacheRead, 400_000);
+  const U2 = { ...U, cache_read_input_tokens: 500_000 };
+  scanLine(toolUseLine({ id: 'm2', usage: U2, blocks: [] }), scan);
+  assert.equal(scan.lastContext.tokens, 502_010);
+});
+
+test('scanLine counts tool_use blocks by name across records sharing a message id, each id once', () => {
+  const scan = freshScan();
+  scanLine(toolUseLine({ id: 'm1', usage: U, blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] }), scan);
+  scanLine(toolUseLine({ id: 'm1', usage: U, blocks: [{ type: 'tool_use', id: 't2', name: 'Read', input: {} }] }), scan);
+  scanLine(toolUseLine({ id: 'm1', usage: U, blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] }), scan); // replayed line
+  assert.deepEqual(scan.tools, { Bash: { count: 1, errors: 0 }, Read: { count: 1, errors: 0 } });
+});
+
+test('scanLine attributes failed tool results by id; unknown ids land in "(unknown)"', () => {
+  const scan = freshScan();
+  scanLine(toolUseLine({ id: 'm1', usage: U, blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] }), scan);
+  scanLine(toolResultLine([{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'boom' }]), scan);
+  scanLine(toolResultLine([{ type: 'tool_result', tool_use_id: 'never-seen', is_error: true, content: 'x' }]), scan);
+  scanLine(toolResultLine([{ type: 'tool_result', tool_use_id: 't1', content: 'fine' }]), scan); // not an error
+  assert.deepEqual(scan.tools.Bash, { count: 1, errors: 1 });
+  assert.deepEqual(scan.tools['(unknown)'], { count: 0, errors: 1 });
+});
+
+test('the tool id ring keeps the last TOOL_RING ids; older ids fall to "(unknown)"', () => {
+  const scan = freshScan();
+  for (let i = 0; i < TOOL_RING + 5; i++) {
+    scanLine(toolUseLine({ id: `m${i}`, usage: U, blocks: [{ type: 'tool_use', id: `t${i}`, name: 'Grep', input: {} }] }), scan);
+  }
+  assert.equal(scan.toolIds.length, TOOL_RING);
+  scanLine(toolResultLine([{ type: 'tool_result', tool_use_id: 't0', is_error: true }]), scan); // evicted
+  scanLine(toolResultLine([{ type: 'tool_result', tool_use_id: `t${TOOL_RING + 4}`, is_error: true }]), scan); // newest
+  assert.equal(scan.tools.Grep.count, TOOL_RING + 5);
+  assert.equal(scan.tools.Grep.errors, 1);
+  assert.equal(scan.tools['(unknown)'].errors, 1);
+});
+
+test('scanLine still buckets your reply time: a tool-result record does not consume the pending assistant mark', () => {
+  const scan = freshScan();
+  scanLine(toolUseLine({ id: 'm1', usage: U, blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] }), scan);
+  const pending = scan.lastAssistantTs;
+  scanLine(toolResultLine([{ type: 'tool_result', tool_use_id: 't1', is_error: true }]), scan);
+  assert.equal(scan.lastAssistantTs, pending);
+});
+
+// --- context and tool summaries ---
+const { contextSummary, toolSummary } = require('../lib/transcripts');
+
+test('contextSummary rounds tokens to the nearest thousand, caps pct at 100, handles missing input', () => {
+  assert.deepEqual(contextSummary({ tokens: 412_345, model: 'claude-opus-5-5' }), { tokens: 412_000, window: 1_000_000, pct: 41 });
+  assert.deepEqual(contextSummary({ tokens: 150_499, model: 'claude-haiku-4-5' }), { tokens: 150_000, window: 200_000, pct: 75 });
+  assert.deepEqual(contextSummary({ tokens: 300_000, model: 'mystery' }), { tokens: 300_000, window: 200_000, pct: 100 }); // clamped
+  assert.equal(contextSummary(null), null);
+  assert.equal(contextSummary(undefined), null);
+  assert.equal(contextSummary({ tokens: 0, model: 'claude-opus-5-5' }), null);
+});
+
+test('toolSummary totals all tools, sorts and caps byName, tolerates missing state', () => {
+  const tools = { Bash: { count: 40, errors: 3 }, Read: { count: 90, errors: 0 }, Edit: { count: 40, errors: 1 }, '(unknown)': { count: 0, errors: 2 } };
+  const s = toolSummary(tools, 2);
+  assert.equal(s.total, 170);
+  assert.equal(s.errors, 6);
+  assert.deepEqual(s.byName, [{ name: 'Read', count: 90, errors: 0 }, { name: 'Bash', count: 40, errors: 3 }]);
+  assert.equal(toolSummary(undefined), null);
+  assert.equal(toolSummary({}), null);
 });

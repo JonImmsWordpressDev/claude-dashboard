@@ -7,3 +7,6 @@ ignore.json
 config.json
 run-hidden.vbs
 chats.json
+
+# Claude Code worktrees (feature branches checked out beside the repo)
+.claude/worktrees/

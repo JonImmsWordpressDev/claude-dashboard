@@ -6,7 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { Collector } = require('./lib/collector');
-const { openSession, openNewSession } = require('./lib/opener');
+const { openSession, openNewSession, revealTarget, revealFile } = require('./lib/opener');
 const { projectDetail } = require('./lib/detail');
 const { sessionTranscript } = require('./lib/transcript-view');
 const { searchHistory, searchTitles, searchNotes, searchTranscripts, parseSearchQuery } = require('./lib/search');
@@ -17,9 +17,10 @@ const cfg = require('./lib/config');
 const { isProjectMuted } = require('./lib/notify');
 const { recentCommits, linkCommitsToSessions } = require('./lib/gitlog');
 const { sessionChangeList, sessionFileDiff } = require('./lib/changes');
-const { demoState, demoStats, demoSession, demoChanges, demoInventory } = require('./lib/demo');
+const { demoState, demoStats, demoSession, demoChanges, demoInventory, demoToolset } = require('./lib/demo');
 const { runSelfUpdate } = require('./lib/update');
 const { readInventory } = require('./lib/inventory');
+const { readToolset } = require('./lib/toolset');
 const DEMO = process.env.CLAUDE_DASH_DEMO === '1';
 
 const PORT = Number(process.env.CLAUDE_DASH_PORT) || 4517;
@@ -57,12 +58,25 @@ function readBody(req, res, cb) {
     if (body.length > 16384) req.destroy();
   });
   req.on('end', () => {
+    let parsed;
     try {
-      cb(JSON.parse(body || '{}'));
+      parsed = JSON.parse(body || '{}');
     } catch {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end('{"ok":false,"error":"bad json"}');
+      return;
     }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end('{"ok":false,"error":"bad json"}');
+      return;
+    }
+    Promise.resolve().then(() => cb(parsed)).catch((e) => {
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: String((e && e.message) || e).slice(0, 200) }));
+      }
+    });
   });
 }
 
@@ -118,14 +132,16 @@ const server = http.createServer((req, res) => {
       return json(res, 200, demoChanges(q.get('id'), q.get('file')));
     }
     if (url === '/api/search') return json(res, 200, { q: '', prompts: [], titles: [], notes: [], transcripts: null });
+    if (url === '/api/reveal-file') return json(res, 200, { ok: true });
     if (url === '/api/project') {
       return json(res, 200, {
         path: '/demo/acme-storefront', sessions: [], commits: [], muted: false,
         claudeMd: [], memory: [], skills: [], agents: [], commands: [], settings: {},
+        toolset: demoToolset(),
       });
     }
     if (url === '/api/config' && req.method === 'GET') {
-      return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, idleNagMinutes: 60, terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], themes: cfg.THEMES, version: VERSION, errors: [] });
+      return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, idleNagMinutes: 60, terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], themes: cfg.THEMES, version: VERSION, errors: [], pricingSource: null, unpricedModels: [] });
     }
     if (url === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
@@ -239,11 +255,12 @@ const server = http.createServer((req, res) => {
       res.end('{"error":"unknown project"}');
       return;
     }
-    Promise.all([projectDetail(known), recentCommits(known)])
-      .then(([detail, commits]) => {
+    Promise.all([projectDetail(known), recentCommits(known), readInventory(collector.projectPaths())])
+      .then(async ([detail, commits, inventory]) => {
         detail.sessions = collector.allSessions(known);
         detail.commits = linkCommitsToSessions(commits, detail.sessions);
         detail.muted = isProjectMuted(known, cfg.readConfig().mutedProjects);
+        detail.toolset = await readToolset(known, inventory);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(detail));
       })
@@ -277,6 +294,8 @@ const server = http.createServer((req, res) => {
       claudeApp: cfg.detectClaudeApp(),
       names: cfg.readNames(),
       ignores: cfg.readIgnores(),
+      pricingSource: cfg.readPricing().source,
+      unpricedModels: collector.unpricedModels(),
     });
     return;
   }
@@ -395,7 +414,7 @@ const server = http.createServer((req, res) => {
     sessionTranscript(found.file, after)
       .then((t) => {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ sessionId: id, title: found.title, projectName: found.projectName, note: found.note || null, changeCount, agents: after ? undefined : (found.agents || null), ...t }));
+        res.end(JSON.stringify({ sessionId: id, title: found.title, projectName: found.projectName, note: found.note || null, changeCount, agents: after ? undefined : (found.agents || null), usage: after ? undefined : (found.usage || null), ...t }));
       })
       .catch((e) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -485,6 +504,11 @@ const server = http.createServer((req, res) => {
         res.end('{"ok":false,"error":"bad json"}');
         return;
       }
+      if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end('{"ok":false,"error":"bad json"}');
+        return;
+      }
       // Fresh session in a known project dir (terminal only).
       if (payload.newSession) {
         const known = collector
@@ -519,6 +543,26 @@ const server = http.createServer((req, res) => {
       });
       res.writeHead(result.ok ? 200 : 500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
+    });
+    return;
+  }
+
+  // Reveal one of three fixed settings files inside a known project in
+  // the OS file manager. The client sends a project path and a key; the
+  // server composes the absolute path itself and refuses anything else.
+  if (url === '/api/reveal-file' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(res, 403, { ok: false, error: 'forbidden' });
+    readBody(req, res, async (payload) => {
+      const rel = revealTarget(String(payload.which || ''));
+      if (!rel) return json(res, 400, { ok: false, error: 'unknown target' });
+      const known = collector
+        .projectPaths()
+        .find((p) => p.toLowerCase() === String(payload.path || '').toLowerCase());
+      if (!known) return json(res, 404, { ok: false, error: 'unknown project' });
+      const abs = path.join(known, rel);
+      if (!fs.existsSync(abs)) return json(res, 404, { ok: false, error: 'no such file' });
+      const result = await revealFile(abs);
+      json(res, result.ok ? 200 : 500, result);
     });
     return;
   }

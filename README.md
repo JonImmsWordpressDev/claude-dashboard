@@ -7,9 +7,11 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 **What you get**
 
 - A departures board of every running session. When Claude stops to ask you something, the row turns amber and shows the question, so you go straight to the right terminal.
+- What each running session costs so far, how fast it is spending, and how full its context window is.
 - A diff of every file Claude edited or created in a session, taken from the backups Claude Code keeps. Read what changed before you commit it.
 - The full transcript of any session, past or present, and a search across every prompt you have ever sent.
-- Cost per project, per model, and per week, estimated from the tokens in your transcripts.
+- Cost per session, project, model, and week, estimated from the tokens in your transcripts, with a breakdown by model and cache use.
+- Per project, the plugins, agents, skills, and MCP servers Claude Code would actually use there, and the exact setting to switch each one on or off.
 - A macOS notification the moment a session needs you, and a reminder if you leave it waiting.
 
 **Why you would want it**
@@ -27,6 +29,15 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 ![Claude Dashboard, dark mode: three live sessions, two of them waiting with the question shown, plus the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
+
+**New in 1.11.0**
+
+- Live cost and a `$/h` burn rate on every running session, and a cost breakdown by model, cache use, and subagents in each transcript.
+- A context meter on every running session, amber from 70% full and red from 90%, plus tool-call and failure counts in Mission Control.
+- A Toolset view in each project's slide-over: which plugins, agents, skills, and MCP servers apply there, which settings file decided each one, and the snippet to flip it.
+- Current list prices for every Claude model, your organization's contracted rates when Claude Code's `modelPricing` is set, and an amber `?` on any model the table does not price.
+- The ten most expensive sessions in stats, and your cache hit rate in the weekly report.
+- Cost labels that match your plan: *estimated cost* on API billing, *list-price value* on a subscription.
 
 **New in 1.10.0**
 
@@ -95,20 +106,20 @@ You should see a dark board listing your projects. If a Claude Code session is r
 **Using it day to day** — three things cover most of it:
 
 - **Glance at the top row.** That's what's running right now. Amber **needs you** means go back to that terminal — Claude asked a question.
-- **Click any session title** to read the whole conversation. If it's still running, new messages stream in live.
+- **Click any session title** to read the whole conversation. If it's still running, new messages stream in live. The `≈$ ▾` button in its header shows what it cost, by model.
 - **Click `open ⬈`** next to an old session to pick it up again — it opens a terminal in the right folder with the conversation restored.
 
 If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To remove everything, run `./uninstall.sh` from the same folder.
 
 ## What you're looking at
 
-- **Departures** — every live `claude` CLI session as a row on the board: start time, project, current task, model, elapsed time, and a split-flap status cell. The cell flips to an amber **needs you** when a session is waiting on your input — readable from across the room. A second line under the title says what it needs: `?` for a question Claude asked (with its options), `🔒` for a tool call awaiting permission (with the command or file), or the last question in Claude's reply, or failing that the first line of its final paragraph.
-- **Mission Control** — the `▦` button in the header (or `⌘K` → Mission Control) tiles every live session side by side, each pane following its own transcript. One screen for "what is everything doing right now".
+- **Departures** — every live `claude` CLI session as a row on the board: start time, project, current task, model, cost so far with a `$/h` burn rate, a context-window meter, elapsed time, and a split-flap status cell. The cell flips to an amber **needs you** when a session is waiting on your input — readable from across the room. A second line under the title says what it needs: `?` for a question Claude asked (with its options), `🔒` for a tool call awaiting permission (with the command or file), or the last question in Claude's reply, or failing that the first line of its final paragraph.
+- **Mission Control** — the `▦` button in the header (or `⌘K` → Mission Control) tiles every live session side by side, each pane following its own transcript. Each pane head shows the model, cost and burn rate, the context meter, and how many tool calls the session has made (failures in amber). One screen for "what is everything doing right now".
 - **Agents** — a session running subagents or an agent team shows them under its Mission Control pane: name, type, model, and a pulsing `●` while an agent has written in the last two minutes, `○` once it has gone quiet (idle teammates stay alive, so quiet is not finished), with the team name when there is one. Finished sessions list them at the top of the transcript.
 - **Pinned** — `☆ pin` on any transcript sticks that session to a strip under the departures board, so the thing you care about stays in view whether it's running or not.
 - **Digest** — what happened across every project, grouped by day. Each entry shows the session's recap (Claude's own "away summary" where one exists — click to expand), how many tasks it completed, and an open button. Switch the window between day / 3 days / week; collapses out of the way and remembers your choice.
 - **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app when it's installed — the **Open in** selector in the header names whichever terminal you've configured (auto-detected on first run). The `⧉` button copies the `claude --resume` command instead.
-- **Header meters** — your plan and rate-limit tier (Free/Pro/Max/Enterprise/API, detected from Claude Code's local account cache), live session and weekly usage from Anthropic's usage API via your existing Claude Code sign-in, plus extra-usage spend. Set a **weekly budget** in settings and a third meter tracks estimated spend against it, with one alert each at 75 / 90 / 100%. First run may show one macOS Keychain prompt — click Always Allow.
+- **Header meters** — your plan and rate-limit tier (Free/Pro/Max/Enterprise/API, detected from Claude Code's local account cache), live session and weekly usage from Anthropic's usage API via your existing Claude Code sign-in, plus extra-usage spend. Set a **weekly budget** in settings and a third meter tracks estimated cost (list-price value on a subscription) against it, with one alert each at 75 / 90 / 100%. First run may show one macOS Keychain prompt — click Always Allow.
 
 ![Mission Control: every live session tiled side by side, each pane following its own transcript, with the waiting reason at the top of each pane and the agent team under the middle one](docs/screenshots/mission-control.png)
 
@@ -117,8 +128,8 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Transcripts** — click any session title (cards, digest, search results, project drawer) to read the conversation: your prompts, Claude's replies rendered as markdown, tool calls as compact one-liners, and away-summaries highlighted. Long sessions show the newest ~1200 events. **Running sessions follow live** — a `● live` badge appears, new turns stream in every few seconds, and the view sticks to the bottom unless you've scrolled up to read.
 - **Search** — the header box searches every prompt you've ever sent plus all session titles (Enter to run, 2+ characters). Narrow with `project:name` or `since:7d` / `since:2026-08-01`. Clicking a prompt result opens the transcript scrolled to the matching turn. If the answer isn't in a prompt, **search inside full transcripts** runs the same query across the conversation bodies — slower, so it's a second click rather than the default.
 - **Command palette** — `⌘K` from anywhere: fuzzy-jump to any project or session, watch a live session, start a new one, open settings or stats. Arrow keys + Enter.
-- **Stats** — click the weekly bar chart in the header: a 26-week activity heatmap, your busiest hours, a weekly-rhythm grid (prompts by day of week and hour), estimated spend per day for the last 90 days, and an all-time per-model token/cost breakdown. The daily spend history is computed from your existing transcripts, so it's full from the first run.
-- **Your week with Claude** — a 7-day report (`⌘K`, or the button at the top of stats): sessions, prompts, estimated spend against your budget, busiest day and hour, models used, and how long you typically take to answer a question. Exports as markdown.
+- **Stats** — click the weekly bar chart in the header: a 26-week activity heatmap, your busiest hours, a weekly-rhythm grid (prompts by day of week and hour), estimated cost per day for the last 90 days (list-price value on a subscription), and an all-time per-model token/cost breakdown. The daily cost history is computed from your existing transcripts, so it's full from the first run.
+- **Your week with Claude** — a 7-day report (`⌘K`, or the button at the top of stats): sessions, prompts, estimated cost (list-price value on a subscription) against your budget, busiest day and hour, models used, how long you typically take to answer a question, and your cache hit rate. Exports as markdown.
 - **Day timeline** — `⌘K` → Day timeline: the last 24 hours as one lane per project, with amber ticks where a session needed you.
 - **Catch-up** — the `🔔` in the header keeps every notification the server has fired since it started, with an unread count. Useful after a morning away from the desk.
 - **Export** — any transcript downloads as clean markdown via the `export ⇩` button.
@@ -134,7 +145,8 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 
 ![Stats view: activity heatmap, busiest hours, weekly rhythm, 90-day spend, and per-model cost breakdowns](docs/screenshots/stats.png)
 
-- **Project details** — click any project's name for a slide-over with its full session list, recent git commits, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools). Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
+- **Project details** — click any project's name for a slide-over with its full session list, recent git commits, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools), plus the resolved **Toolset** below. Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
+- **Toolset** — inside the project slide-over: what Claude Code would actually use in that project. Every installed plugin, every agent and skill from the project, your user dir, and enabled plugins, and every MCP server that applies, each marked on or off with where it came from and which settings scope decided it, resolved with Claude Code's own precedence (managed › local › project › user, deny beats allow, project agents shadow user agents shadow plugin agents). An amber list at the top flags things worth a look: a plugin enabled but not installed or gone stale, a deny rule naming an agent that no longer exists, a server that needs auth, a settings file that doesn't parse. The `⧉` on a row copies the exact snippet to flip it, aimed at `.claude/settings.local.json`; MCP toggles live in Claude's own registry, so that recipe tells you to run `/mcp` in a session instead (servers from a project's `.mcp.json` also honour the settings keys `enabledMcpjsonServers`, `disabledMcpjsonServers` and `enableAllProjectMcpServers`, and their recipes use those). Buttons at the foot reveal the project's settings files in Finder. Read-only — the dashboard never edits Claude configuration.
 - **Plugins & MCP** — `⌘K` → Plugins & MCP (or the button in settings) lists every installed plugin with its marketplace, version, on/off state and a `stale` flag when its marketplace was refreshed after the plugin was last updated, plus every MCP server with its scope, the projects that use it, an `off` chip for servers you have disabled in a project, and an amber `needs auth` when Claude Code says so. Read-only; server secrets never reach the browser.
 
 ![Plugins & MCP inventory: plugins with on, off, stale and missing states; MCP servers with scope, projects, disabled flags and needs-auth](docs/screenshots/inventory.png)
@@ -143,7 +155,11 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Dormant** — projects with no activity for 60+ days, tucked away at the bottom.
 - Worktree sessions (`.claude/worktrees/…`) are folded into their parent project and badged `⎇`.
 - **Notifications** — the moment any session flips to "waiting for input", you get a macOS notification (with sound) naming the project and what it needs — the question, the command awaiting permission, or Claude's last line. Fires once per wait, never on server restart. Mute a single noisy project from its slide-over (the bell button at the top), or disable everything with `CLAUDE_DASH_NOTIFY=0` in the plist. Notifications arrive via Script Editor/osascript — if you don't see them, allow it under System Settings → Notifications.
-- **Cost estimates** — the header shows the estimated list-price value of the last 7 days across all projects; each project card and digest entry shows its share. Computed from token usage in the transcripts at Anthropic list rates (cache reads at 0.1×, cache writes at 1.25×). On a subscription plan these are relative weights, not billed dollars — use them to see where your usage goes. Subagent tokens are included.
+- **Cost estimates** — every session, project, and live row carries a `≈$` figure computed from the token counts in its transcript. On an API-key login it is labelled *estimated cost*; on a subscription it is *list-price value*, a relative weight rather than a bill (hover a cost chip for the wording). Rates are Anthropic list prices bundled with the dashboard (cached 2026-10-06). If your organization deploys Claude Code's `modelPricing` managed setting, the dashboard reads it and reports at your contracted rates; you can also put the same `modelPricing` block in `config.json` (⚙ settings → *copy skeleton*). A model the table doesn't know is priced at the Opus tier and marked with an amber `?` so a stale table is never silent. Subagent tokens are included.
+- **Live cost** — running sessions show their cost so far on the departures board and in Mission Control, with a `$/h` burn rate once the session is five minutes old.
+- **Session cost breakdown** — the `≈$ ▾` button in a transcript's header opens a table by model (input, output, cache read, cache write), the subagent share, and the session's cache hit rate.
+- **Context and tools** — each live session shows how full its context window was on the last turn (`412k / 1M`, amber from 70%, red from 90%), so you can see a compaction or a fresh session coming. Mission Control panes add the session's tool-call count with failures in amber, and the transcript's cost panel shows the same count in its footer. Read from the same incremental transcript scan as everything else; subagents are not included.
+- **Most expensive sessions** — in the stats view: the ten costliest sessions all time, click to open.
 - **Stuck flag** — a session that's "busy" but has written nothing to its transcript for 10+ minutes gets an amber `quiet Nm` cell; at 20 minutes you get one notification. It's a hint, not a verdict — a session waiting on slow background work can look the same.
 - **Idle reminder** — a session left on **needs you** for an hour (configurable in settings, `0` to turn off) gets one more notification and a `still waiting` entry in the catch-up bell, and its elapsed cell turns amber with the wait time. Nothing repeats until you answer it.
 
@@ -169,6 +185,7 @@ The ⚙ gear in the header opens settings — no JSON editing required:
 - **Rename any project** (writes `names.json`) or **hide it** and its whole subtree (writes `ignore.json`), with an unhide list below
 - **Claude.ai chats**: pick the `conversations.json` from your claude.ai export to make those chats searchable here
 - **Updates**: "check for updates" asks GitHub only when you click; when a new release is out, **update now** pulls it in place (git or npm installs) and service installs restart themselves on the new version
+- **Pricing** shows which rate table is active (bundled, `config.json`, or your organization's managed `modelPricing`) and lists any model the table doesn't price; *copy skeleton* puts a `modelPricing` block on the clipboard to paste into `config.json`
 
 Everything saves instantly; the underlying files stay hand-editable. Keyboard: `⌘K` for the palette, `/` for search, `Esc` closes anything.
 
@@ -207,6 +224,21 @@ Edit `ignore.json` — an array of absolute path prefixes. A project is hidden i
 
 The server binds to `127.0.0.1` only by default.
 
+**Your own rates.** To price usage at rates other than Anthropic's list prices, add a `modelPricing` block to `config.json`. It uses the same shape as Claude Code's managed setting: a `multiplier` that scales every cost, and per-model `overrides` in USD per million tokens. ⚙ settings → **Pricing** → *copy skeleton* puts a starting block on your clipboard:
+
+```json
+{
+  "modelPricing": {
+    "multiplier": 1,
+    "overrides": {
+      "claude-opus-5-5": { "input": 4, "output": 20, "cacheRead": 0.2, "cacheWrite": 5 }
+    }
+  }
+}
+```
+
+If your organization deploys `modelPricing` in Claude Code's managed settings, the dashboard reads that instead, and ⚙ settings says which source is active.
+
 ## Windows (experimental — testers wanted)
 
 The core is plain cross-platform Node, and Windows support is wired in: paths handle drive letters, notifications use native toasts, and sessions open in Windows Terminal, PowerShell, or cmd (auto-detected). Install from PowerShell in the repo folder:
@@ -221,7 +253,7 @@ That registers a logon Scheduled Task ("ClaudeDashboard") running the server hid
 
 ## Access from your phone
 
-The recommended path is [Tailscale](https://tailscale.com): install it on the Mac and your phone, then run `tailscale serve --bg 4517`. That publishes the dashboard over HTTPS inside your private tailnet while the server itself stays loopback-only — nothing is exposed to the internet or your LAN. Alternatively set `CLAUDE_DASH_HOST=0.0.0.0` in the plist to bind to all interfaces, but understand what that means: anyone on the same network can view the dashboard **and use the open/new-session endpoints, which launch terminal commands on this Mac**. Don't do that on a network you don't fully control.
+The recommended path is [Tailscale](https://tailscale.com): install it on the Mac and your phone, then run `tailscale serve --bg 4517`. That publishes the dashboard over HTTPS inside your private tailnet while the server itself stays loopback-only — nothing is exposed to the internet or your LAN. Alternatively set `CLAUDE_DASH_HOST=0.0.0.0` in the plist to bind to all interfaces, but understand what that means: anyone on the same network can view the dashboard **and use the open/new-session endpoints, which launch terminal commands on this Mac**, plus the reveal-file endpoint, which opens Finder on a project's settings files. Don't do that on a network you don't fully control.
 
 ## Maintenance
 
@@ -247,6 +279,11 @@ Every `/api/*` route serves invented data from `lib/demo.js` instead of reading 
 | Activity | `~/.claude/history.jsonl` |
 | Session todos | `~/.claude/tasks/<sessionId>/` |
 | Usage meters | Anthropic usage API via Claude Code's Keychain sign-in (fallback: `~/.claude/.statusline-usage-cache`) |
+| Cost, context, tool counts | Token usage, tool calls, and failed tool results in the same transcripts, read incrementally (only bytes added since the last scan) |
+| Pricing overrides | `modelPricing` in Claude Code's managed settings (`/Library/Application Support/ClaudeCode/managed-settings.json` on macOS), then `config.json` |
+| File changes | `~/.claude/file-history/<sessionId>/` (Claude Code's pre-edit backups) |
+| Plugins & MCP | `~/.claude/plugins/installed_plugins.json`, `known_marketplaces.json`, `~/.claude.json`, each project's `.mcp.json` |
+| Toolset | `~/.claude/settings.json`, each project's `.claude/settings.json` and `.claude/settings.local.json`, managed settings, `~/.claude/agents` and `~/.claude/skills`, the project's `.claude/agents` and `.claude/skills`, and each enabled plugin's `agents/` and `skills/` |
 
 ## Credits
 

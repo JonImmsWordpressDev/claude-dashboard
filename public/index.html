@@ -291,6 +291,19 @@
   .dep-right { display: flex; align-items: center; gap: 10px; justify-self: end; }
   .dep-elapsed { color: var(--faint); font-size: 12px; }
   .dep-elapsed.overdue { color: var(--warn); font-weight: 600; }
+  .unpriced { color: var(--warn); font-weight: 700; margin-left: 2px; cursor: help; }
+  .dep-cost { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; min-width: 52px; }
+  .dep-cost-main { color: var(--muted); font-size: 12px; }
+  .dep-burn { color: var(--faint); font-size: 10.5px; }
+  .ctx { display: inline-flex; flex-direction: column; gap: 2px; min-width: 64px; }
+  .ctx-label { font-size: 10.5px; color: var(--faint); text-align: right; white-space: nowrap; }
+  .ctx-bar { height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+  .ctx-fill { height: 100%; background: var(--accent); }
+  .ctx.warn .ctx-fill { background: var(--warn); }
+  .ctx.warn .ctx-label { color: var(--warn); }
+  .ctx.bad .ctx-fill { background: var(--bad); }
+  .ctx.bad .ctx-label { color: var(--bad); }
+  .mc-meta .failed { color: var(--warn); }
   .mc-meta.overdue { color: var(--warn); font-weight: 600; }
   .st { font-size: 11.5px; letter-spacing: 0.14em; padding: 3px 10px 2px; }
   .st.st-busy { color: var(--accent); }
@@ -743,6 +756,23 @@
   .stat-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
   .stat-table td { padding: 5px 0; border-bottom: 1px solid var(--line); }
   .stat-table td:last-child, .stat-table td:nth-child(2) { text-align: right; color: var(--muted); }
+  .ts-audit { margin: 0 0 10px; padding-left: 18px; font-size: 12px; color: var(--warn); }
+  .ts-audit li.info { color: var(--muted); }
+  .ts-table td { text-align: left; }
+  .ts-table td:last-child { text-align: right; width: 32px; }
+  .ts-table td:nth-child(2) { text-align: left; white-space: nowrap; }
+  .ts-state { font-size: 11px; padding: 1px 6px; border-radius: 10px; border: 1px solid var(--line); }
+  .ts-state.on { color: var(--accent); }
+  .ts-state.off { color: var(--faint); }
+  .ts-src { font-size: 11px; color: var(--faint); margin-left: 6px; }
+  .ts-shadow { font-size: 11px; color: var(--muted); margin-left: 6px; }
+  .ts-foot { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .ts-kind summary { cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); margin: 8px 0 2px; }
+  #usage-panel { margin: 0 0 14px; padding: 10px 12px; background: var(--surface2); border: 1px solid var(--line); border-radius: 6px; }
+  .usage-table td { text-align: right; }
+  .usage-table td:first-child { text-align: left; }
+  .usage-table tr.h td { color: var(--faint); font-size: 11px; border-bottom: 1px solid var(--line); }
+  .usage-foot { margin-top: 8px; font-size: 11.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
   .stat-totals { color: var(--muted); font-size: 12px; margin-top: 12px; }
   .stat-totals strong { color: var(--ink); }
   .inv-chip { padding: 0 6px; border-radius: 2px; font-size: 11px; background: var(--chip-bg); color: var(--muted); }
@@ -951,7 +981,7 @@ function weeklyChart(weeks) {
       fill="${v ? 'var(--accent)' : 'var(--line)'}"><title>${esc(label)}</title></rect>`;
   }
   return `<svg id="wk-chart" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"
-    aria-label="estimated cost per week, last 8 weeks">${bars}</svg>`;
+    aria-label="${esc(costWording().noun)} per week, last 8 weeks">${bars}</svg>`;
 }
 
 function meter(label, pct, title) {
@@ -1010,6 +1040,26 @@ function fmtCost(usd) {
   return usd >= 100 ? `$${Math.round(usd)}` : `$${usd.toFixed(2)}`;
 }
 
+// Every cost figure is a list-price estimate. On API billing that is an
+// estimate of the invoice; on a subscription it is a relative weight.
+function costWording() {
+  const api = lastState?.plan?.billing === 'api';
+  return api
+    ? { noun: 'estimated cost', tip: 'Estimated from token counts at Anthropic list prices. Your invoice is the source of truth.' }
+    : { noun: 'list-price value', tip: 'What these tokens would cost at API list price. On a subscription this is a relative weight, not a bill.' };
+}
+
+const UNPRICED_TIP = 'A model in this session is not in this version\'s rate table; Opus-tier rate assumed. Update the dashboard or set modelPricing in config.json.';
+
+// One chip for every cost figure: same wording, same tooltip, same marker.
+function costChip(usd, { cls = 's-when', assumed = false, before = '', after = '' } = {}) {
+  const f = fmtCost(usd);
+  if (!f) return '';
+  const w = costWording();
+  const tip = `${w.noun} — ${w.tip}${assumed ? ` ${UNPRICED_TIP}` : ''}`;
+  return `<span class="${cls}" title="${esc(tip)}">${before}≈${f}${assumed ? '<span class="unpriced" title="' + esc(UNPRICED_TIP) + '">?</span>' : ''}${after}</span>`;
+}
+
 function copyBtn(cmd) {
   return `<button class="copy" data-cmd="${esc(cmd)}" title="Copy resume command">⧉</button>`;
 }
@@ -1048,6 +1098,23 @@ function gitBadges(git, missing) {
   return out.join('');
 }
 
+// 412000 -> "412k", 1000000 -> "1M", 1500000 -> "1.5M".
+function fmtCtx(n) {
+  if (n >= 1e6) return `${+(n / 1e6).toFixed(1)}M`;
+  return `${Math.round(n / 1000)}k`;
+}
+
+// How full the context window was on the last turn: amber from 70%, red from 90%.
+function contextMeter(ctx) {
+  if (!ctx) return '';
+  const level = ctx.pct >= 90 ? 'bad' : ctx.pct >= 70 ? 'warn' : '';
+  const tip = 'How much of the context window the last turn used. Claude Code compacts automatically as this fills; a fresh session is cheaper per turn when it is high.';
+  return `<span class="ctx ${level}" title="${esc(`${ctx.pct}% — ${tip}`)}">
+    <span class="ctx-label">${esc(fmtCtx(ctx.tokens))} / ${esc(fmtCtx(ctx.window))}</span>
+    <span class="ctx-bar"><span class="ctx-fill" style="width:${Math.max(0, Math.min(100, Number(ctx.pct) || 0))}%"></span></span>
+  </span>`;
+}
+
 function liveCard(s) {
   const task = s.currentTask
     ? `<div class="dep-task mono"><span class="prompt-ch">❯</span>${esc(s.currentTask.activeForm)}${
@@ -1071,6 +1138,9 @@ function liveCard(s) {
     </div>
     <div class="dep-right">
       ${modelChip(s.model)}
+      ${s.estCost != null ? `<span class="dep-cost">${costChip(s.estCost, { cls: 'dep-cost-main', assumed: s.assumed })}${
+        s.burnRate ? `<span class="dep-burn" title="Estimated spend per hour at the current pace">$${s.burnRate}/h</span>` : ''}</span>` : ''}
+      ${contextMeter(s.context)}
       ${s.waitingMin != null
         ? `<span class="dep-elapsed overdue" title="No reply for ${s.waitingMin} minutes — session started ${elapsed(s.startedAt)} ago">${waitLabel(s.waitingMin)}</span>`
         : `<span class="dep-elapsed">${elapsed(s.startedAt)}</span>`}
@@ -1104,7 +1174,7 @@ function projectCard(p) {
     </div>
     <div class="meta">
       ${gitBadges(p.git, p.missing)}
-      ${fmtCost(p.spend7d) ? `<span class="badge" title="Estimated list-price value of the last 7 days of sessions">≈${fmtCost(p.spend7d)}/7d</span>` : ''}
+      ${costChip(p.spend7d, { cls: 'badge', after: '/7d' })}
       <span class="when" title="${esc(p.path)}">${relTime(p.lastActivityAt)}</span>
     </div>
     ${sessions}
@@ -1194,7 +1264,7 @@ function digestItem(it) {
       ${running ? '<span class="flap disp st st-busy">running</span>' : ''}
       ${modelChip(it.model)}
       ${changesChip(it)}
-      ${fmtCost(it.estCost) ? `<span class="di-when" title="Estimated list-price value of this session">≈${fmtCost(it.estCost)}</span>` : ''}
+      ${costChip(it.estCost, { cls: 'di-when', assumed: it.assumed })}
       <span class="di-when">${time}</span>
       ${openBtn(it.sessionId)}
     </div>
@@ -1234,6 +1304,14 @@ function render(state) {
   if (state.theme && state.theme !== 'board') document.documentElement.dataset.theme = state.theme;
   else delete document.documentElement.dataset.theme;
   liveIds = new Set((state.liveSessions || []).map((s) => s.sessionId));
+  // A transcript being followed live keeps its header cost in step with the board.
+  if (follow.id && exportableSession?.id === follow.id && exportableSession.usage) {
+    const live = (state.liveSessions || []).find((s) => s.sessionId === follow.id);
+    if (live && live.estCost != null && live.estCost !== exportableSession.usage.cost) {
+      exportableSession.usage.cost = live.estCost;
+      transcriptStatus();
+    }
+  }
   // quota
   const q = state.quota;
   const qEl = $('#quota');
@@ -1250,7 +1328,7 @@ function render(state) {
     ? meter('budget', (b.spent / b.limit) * 100, `≈$${b.spent.toFixed(0)} of your $${b.limit} weekly budget (7-day estimate)`)
     : '';
   const spendChip = planChip + (fmtCost(spend)
-    ? `${weeklyChart(state.weeklyCost)}<span title="Estimated list-price value of all sessions in the last 7 days — relative weight, not billed dollars">7d ≈${fmtCost(spend)}</span>`
+    ? `${weeklyChart(state.weeklyCost)}${costChip(spend, { cls: '', before: '7d ' })}`
     : '') + budgetMeter;
   if (q) {
     qEl.className = q.stale ? 'stale' : '';
@@ -1375,6 +1453,30 @@ document.addEventListener('click', async (e) => {
     btn.disabled = false;
     return;
   }
+  if (btn.dataset.recipe !== undefined) {
+    try {
+      await navigator.clipboard.writeText(btn.dataset.recipe);
+      toast(`Copied — merge into ${btn.dataset.recipeTarget}`);
+    } catch {
+      toast('Clipboard blocked by the browser');
+    }
+    return;
+  }
+  if (btn.dataset.reveal) {
+    try {
+      const r = await fetch('/api/reveal-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: btn.dataset.revealPath, which: btn.dataset.reveal }),
+      });
+      const out = await r.json();
+      toast(out.ok ? 'Revealed in the file manager' : `Couldn't reveal: ${out.error}`);
+    } catch {
+      toast("Couldn't reach the server");
+    }
+    return;
+  }
+  if (btn.dataset.cmd === undefined) return; // other .copy buttons have their own handlers
   navigator.clipboard.writeText(btn.dataset.cmd).then(() => toast('Resume command copied'));
 });
 
@@ -1459,6 +1561,45 @@ function dFiles(files, nameKey) {
   </div>`).join('');
 }
 
+// One row per plugin/agent/skill/server with state, source, the scope that
+// decided it, and a copy button for the recipe that flips it.
+function toolsetRow(r) {
+  const state = r.enabled ? (r.mode && r.mode !== 'on' ? r.mode : 'on') : 'off';
+  const decided = r.decidedBy === 'default' ? '' : ` · by ${r.decidedBy}`;
+  const src = r.source === 'plugin' ? `plugin:${esc(String(r.pluginId || '').split('@')[0])}` : esc(r.source);
+  return `<tr>
+    <td><span title="${esc(r.description || '')}">${esc(r.name)}</span>${
+      r.installed === false ? ' <span class="badge" title="enabled in settings but not installed">not installed</span>' : ''}${
+      r.stale ? ' <span class="badge" title="marketplace refreshed after this plugin was last updated">stale</span>' : ''}${
+      r.needsAuth ? ' <span class="badge" style="color:var(--warn)">needs auth</span>' : ''}${
+      r.shadowed && r.shadowed.length ? ` <span class="ts-shadow" title="${esc('lower-precedence copies: ' + r.shadowed.join(', '))}">shadows ${r.shadowed.length}</span>` : ''}</td>
+    <td><span class="ts-state ${r.enabled ? 'on' : 'off'}">${esc(state)}</span><span class="ts-src">${src}${esc(decided)}</span></td>
+    <td>${r.recipe ? `<button class="copy" data-recipe="${esc(r.recipe.text)}" data-recipe-target="${esc(r.recipe.target)}" title="${esc(`Copy: ${r.recipe.label}`)}">⧉</button>` : ''}</td>
+  </tr>`;
+}
+
+function toolsetHtml(t, projectPath) {
+  if (!t) return null;
+  const audit = (t.audit || []).length
+    ? `<ul class="ts-audit">${t.audit.map((a) => `<li class="${a.level === 'info' ? 'info' : ''}">${esc(a.text)}</li>`).join('')}</ul>` : '';
+  const table = (label, rows, empty) => {
+    const off = rows.filter((r) => !r.enabled);
+    const ordered = [...off, ...rows.filter((r) => r.enabled)];
+    return `<details class="ts-kind"${rows.length < 8 ? ' open' : ''}><summary>${esc(label)} — ${rows.length}${off.length ? ` · ${off.length} off` : ''}</summary>${
+      rows.length ? `<table class="stat-table ts-table">${ordered.map(toolsetRow).join('')}</table>` : `<div class="d-empty">${esc(empty)}</div>`}</details>`;
+  };
+  const fileBtn = (which, label) => t.files && t.files[which]
+    ? `<button class="copy" data-reveal="${which}" data-reveal-path="${esc(projectPath)}" title="Reveal in the file manager">open ${esc(label)}</button>`
+    : `<button class="copy" data-recipe="{}" data-recipe-target="${esc(label)}" title="This file does not exist yet — copies an empty object to start it">create ${esc(label)}</button>`;
+  return audit +
+    table('Plugins', t.plugins || [], 'No plugins installed.') +
+    table('Agents', t.agents || [], 'No agents from the project, your user dir, or enabled plugins.') +
+    table('Skills', t.skills || [], 'No skills from the project, your user dir, or enabled plugins.') +
+    table('MCP servers', t.mcp || [], 'No MCP servers apply to this project.') +
+    `<div class="ts-foot">${fileBtn('local', '.claude/settings.local.json')}${fileBtn('project', '.claude/settings.json')}${
+      t.files && t.files.mcpJson ? fileBtn('mcpJson', '.mcp.json') : ''}</div>`;
+}
+
 function renderDetail(d, name) {
   $('#d-title').textContent = name;
   $('#d-path').textContent = d.path;
@@ -1468,7 +1609,7 @@ function renderDetail(d, name) {
           <span class="s-title" data-session="${esc(s.sessionId)}" title="Click to read the transcript">${
             s.worktree ? `<span class="wt mono">⎇ ${esc(s.worktree)}</span> ` : ''}${esc(s.title)}</span>${noteMark(s)}
           ${changesChip(s)}
-          ${fmtCost(s.estCost) ? `<span class="s-when">≈${fmtCost(s.estCost)}</span>` : ''}
+          ${costChip(s.estCost, { assumed: s.assumed })}
           <span class="s-when">${relTime(s.lastActivityAt)}</span>
           ${renameBtn(s.sessionId, s.title)}
           ${openBtn(s.sessionId)}
@@ -1501,6 +1642,11 @@ function renderDetail(d, name) {
       <span class="s-when">${esc(statCompact(c.stat))}</span>
       <span class="s-when">${relTime(c.ts)}</span>
     </li>`).join('');
+  const tsFiles = { ...((d.toolset && d.toolset.files) || {}), mcpJson: !!(d.settings && d.settings.mcpJson) };
+  const ts = d.toolset ? { ...d.toolset, files: tsFiles } : null;
+  const KINDS = ['plugins', 'agents', 'skills', 'mcp'];
+  const tsOn = ts ? KINDS.reduce((n, k) => n + (ts[k] || []).filter((r) => r.enabled).length, 0) : 0;
+  const tsOff = ts ? KINDS.reduce((n, k) => n + (ts[k] || []).filter((r) => !r.enabled).length, 0) : 0;
   $('#d-body').innerHTML =
     muteBtn +
     dSection(`Sessions — ${d.sessions.length}`, sessions, 'No sessions recorded.') +
@@ -1508,6 +1654,7 @@ function renderDetail(d, name) {
     dSection('CLAUDE.md', d.claudeMd.length ? dFiles(d.claudeMd, 'name') : null, 'No CLAUDE.md — sessions here start without project instructions.') +
     dSection(`Memory — ${d.memory.length} file${d.memory.length === 1 ? '' : 's'}`, d.memory.length ? dFiles(d.memory, 'name') : null, 'No memory yet.') +
     dSection(`Skills, agents & commands — ${caps.length}`, caps.length ? dFiles(caps, 'name') : null, 'None in .claude/skills, .claude/agents, or .claude/commands.') +
+    dSection(`Toolset — ${tsOn} on · ${tsOff} off`, toolsetHtml(ts, d.path), 'Toolset unavailable.') +
     dSection('Settings', settingsEntries.length ? settingsEntries.join('') : null, 'No project-level settings or MCP servers.');
 }
 
@@ -1595,11 +1742,47 @@ function transcriptStatus() {
   const n = sid ? sessionChangeCount(sid) : 0;
   $('#d-path').textContent = `${follow.projectName} · ${follow.eventCount} events${liveNow ? ' · ● live' : ''}`;
   $('#d-actions').innerHTML = `
+    ${exportableSession?.usage ? `<button class="copy" data-usage-toggle title="${esc(`${costWording().noun} — ${costWording().tip}${exportableSession.usage.assumedModels?.length ? ' ' + UNPRICED_TIP : ''} Click for the breakdown by model.`)}">≈${fmtCost(exportableSession.usage.cost) || '$0.00'}${exportableSession.usage.assumedModels?.length ? ` <span class="unpriced" title="${esc(UNPRICED_TIP)}">?</span>` : ''} ▾</button>` : ''}
     ${n ? `<button class="copy" data-changes-toggle="${esc(sid)}" title="Files Claude edited in this session">changes Δ ${n}</button>` : ''}
     ${sid ? `<button class="copy" data-note-toggle title="Attach a note to this session">note${exportableSession.note ? ' ≡' : ''}</button>` : ''}
     <button class="copy" data-export title="Download this transcript as markdown">export ⇩</button>
     ${sid ? `<button class="copy" data-pin="${esc(sid)}" title="${isPinned ? 'Unpin this session' : 'Pin this session to the top of the dashboard'}">${isPinned ? '★ pinned' : '☆ pin'}</button>` : ''}
     ${!liveNow ? '<button class="copy" data-replay title="Play the conversation back turn by turn">replay ▸</button>' : ''}`;
+}
+
+function fmtTok(n) {
+  return n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n || 0);
+}
+
+function usagePanelHtml(u) {
+  const w = costWording();
+  const rows = u.byModel.map((r) => `<tr>
+    <td>${esc(modelShort(r.model))}${u.assumedModels?.includes(r.model) ? ' <span class="unpriced" title="' + esc(UNPRICED_TIP) + '">?</span>' : ''}</td>
+    <td>${fmtTok(r.input)}</td><td>${fmtTok(r.output)}</td><td>${fmtTok(r.cacheRead)}</td><td>${fmtTok(r.cacheCreation)}</td>
+    <td>≈$${r.cost.toFixed(2)}</td></tr>`).join('');
+  const subs = u.subagents
+    ? `<tr><td colspan="5">of which subagents (${u.subagents.count}, ${fmtTok(u.subagents.tokens)} tok)</td><td>≈$${u.subagents.cost.toFixed(2)}</td></tr>`
+    : '';
+  const foot = [
+    u.cacheHitRatio != null ? `cache ${Math.round(u.cacheHitRatio * 100)}% of input served from cache` : null,
+    u.context ? `context ${fmtCtx(u.context.tokens)} / ${fmtCtx(u.context.window)} (${u.context.pct}%)` : null,
+    u.tools ? `${u.tools.total} tool calls${u.tools.errors ? `, ${u.tools.errors} failed` : ''}` : null,
+    u.assumedModels?.length ? `unpriced: ${u.assumedModels.map(modelShort).join(', ')} (Opus-tier rate assumed)` : null,
+  ].filter(Boolean).join(' · ');
+  return `<div id="usage-panel">
+    <table class="stat-table usage-table">
+      <tr class="h"><td>model</td><td>in</td><td>out</td><td>cache read</td><td>cache write</td><td>${esc(w.noun)}</td></tr>
+      ${rows}${subs}
+    </table>
+    <div class="usage-foot">${esc(foot)}<span class="set-sub">${esc(w.tip)}</span></div>
+  </div>`;
+}
+
+function toggleUsagePanel() {
+  const existing = $('#usage-panel');
+  if (existing) { existing.remove(); return; }
+  if (!exportableSession?.usage) return;
+  $('#d-body').insertAdjacentHTML('afterbegin', usagePanelHtml(exportableSession.usage));
 }
 
 function openNoteEditor() {
@@ -1810,6 +1993,7 @@ async function openTranscript(sessionId, highlight, opts = {}) {
     const t = await r.json();
     exportableSession = { id: sessionId, title: t.title, note: t.note || null };
     exportableSession.changeCount = t.changeCount || 0;
+    exportableSession.usage = t.usage || null;
     follow.id = sessionId;
     follow.offset = t.nextOffset;
     follow.lastDay = '';
@@ -1873,7 +2057,7 @@ function mcPaneHead(s) {
         s.subagents.mtok ? ` · ${s.subagents.mtok}M tok` : ''}</span>`
     : '';
   return `<span class="mc-proj" data-session="${esc(s.sessionId)}" title="Open the full transcript">${esc(s.projectName)}</span>
-    ${modelChip(s.model)}${subs}<span class="spacer"></span>
+    ${modelChip(s.model)}${s.estCost != null ? costChip(s.estCost, { cls: 'mc-meta', assumed: s.assumed, after: s.burnRate ? ` · $${s.burnRate}/h` : '' }) : ''}${subs}${contextMeter(s.context)}${s.tools ? `<span class="mc-meta" title="tool calls in this session">${s.tools.total} tools${s.tools.errors ? ` · <span class="failed">${s.tools.errors} failed</span>` : ''}</span>` : ''}<span class="spacer"></span>
     <span class="mc-meta${s.waitingMin != null ? ' overdue' : ''}">${s.waitingMin != null ? waitLabel(s.waitingMin) : elapsed(s.startedAt)}</span>${statusFlap(s, 'mc:')}`;
 }
 
@@ -2224,6 +2408,15 @@ async function openSettings() {
       <div class="set-row">
         <span class="set-label">Plugins &amp; MCP servers<span class="set-sub">everything installed or configured, across all projects</span></span>
         <button class="copy" id="set-inventory">open inventory</button>
+      </div>
+      <div class="set-row">
+        <span class="set-label">Pricing<span class="set-sub">${esc(
+          c.pricingSource === 'managed' ? "using your organization's managed modelPricing rates"
+          : c.pricingSource === 'config' ? 'using modelPricing from config.json'
+          : 'bundled list prices, cached 2026-10-06')}${(c.unpricedModels || []).length
+            ? ` · <span class="unpriced">?</span> unpriced: ${esc(c.unpricedModels.join(', '))} — Opus-tier rate assumed; update the dashboard or add modelPricing to config.json`
+            : ''}</span></span>
+        <button class="copy" id="set-pricing-copy" title="Copy a modelPricing block to paste into config.json">copy skeleton</button>
       </div>`;
     const diag = (c.errors || []).length
       ? (c.errors || []).map((e) => `<div class="set-row"><span class="set-label mono" style="font-size:11.5px">${esc(e.message)}<span class="set-sub">${relTime(e.at)}</span></span></div>`).join('')
@@ -2267,6 +2460,21 @@ async function openSettings() {
       }
     });
     $('#set-inventory').addEventListener('click', openInventory);
+    $('#set-pricing-copy').addEventListener('click', async () => {
+      const skeleton = {
+        modelPricing: {
+          _note: 'USD per million tokens. multiplier scales every cost (0 < x <= 10); overrides are per model id with all four rates.',
+          multiplier: 1,
+          overrides: { 'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 } },
+        },
+      };
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(skeleton, null, 2));
+        toast('modelPricing skeleton copied — merge it into config.json');
+      } catch {
+        toast('Clipboard blocked — see config.example.json for the shape');
+      }
+    });
     $('#set-notify').addEventListener('change', (e) =>
       saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
     $('#set-usage').addEventListener('change', (e) =>
@@ -2335,6 +2543,7 @@ document.addEventListener('mousedown', (e) => { if (e.target.closest('[data-note
 
 document.addEventListener('click', async (e) => {
   if (e.target.closest('[data-note-toggle]')) { openNoteEditor(); return; }
+  if (e.target.closest('[data-usage-toggle]')) { toggleUsagePanel(); return; }
   const pin = e.target.closest('[data-pin]');
   if (pin) {
     const r = await fetch('/api/config', {
@@ -2471,6 +2680,11 @@ async function openStats() {
         .join(' · ');
       return `<tr><td>${esc(p.name)}</td><td style="text-align:left;color:var(--muted)">${parts}</td><td>≈$${p.total.toFixed(2)}</td></tr>`;
     }).join('');
+    const topRows = (s.topSessions || []).map((t) => `<tr>
+      <td><span class="s-title" data-session="${esc(t.sessionId)}" title="Click to read the transcript">${esc(t.title)}</span>
+        <span class="set-sub">${esc(t.projectName)}${t.model ? ` · ${esc(modelShort(t.model))}` : ''}</span></td>
+      <td>${relTime(t.lastActivityAt)}</td>
+      <td>≈$${t.cost.toFixed(2)}</td></tr>`).join('');
     $('#d-body').innerHTML =
       '<div style="margin-top:10px"><button class="copy" data-week>your week with Claude →</button></div>' +
       dSection('Activity — last 26 weeks', `<div class="heat">${cells.join('')}</div>`) +
@@ -2480,8 +2694,9 @@ async function openStats() {
       dSection('Spend — last 90 days', costDays.length ? `<div class="hours">${costBars}</div>
         <div class="hours-labels"><span>${esc(costStart)}</span><span>today</span></div>` : null, 'No usage recorded yet.') +
       dSection('By model — all time', models.length ? `<table class="stat-table">${modelRows}</table>` : null, 'No usage recorded yet.') +
+      dSection('Most expensive sessions', topRows ? `<table class="stat-table">${topRows}</table>` : null, 'No sessions costed yet.') +
       dSection('Models by project', projRows ? `<table class="stat-table">${projRows}</table>` : null, 'No project usage yet.') +
-      `<div class="stat-totals"><strong>${s.totals.sessions}</strong> sessions · <strong>${s.totals.prompts}</strong> prompts · <strong>≈$${s.totals.cost}</strong> estimated list-price value, all time</div>`;
+      `<div class="stat-totals"><strong>${s.totals.sessions}</strong> sessions · <strong>${s.totals.prompts}</strong> prompts · <strong>≈$${s.totals.cost}</strong> ${esc(costWording().noun)}, all time</div>`;
   } catch {
     $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load stats.</div>';
   }
@@ -2675,10 +2890,11 @@ async function openWeekReport() {
     const rows = [
       ['Sessions', String(w.sessions ?? 0)],
       ['Prompts', String(w.prompts ?? 0)],
-      ['Estimated spend', `≈$${(w.cost || 0).toFixed(2)}${b ? ` of your $${b.limit} budget` : ''}`],
+      [costWording().noun.replace(/^./, (c) => c.toUpperCase()), `≈$${(w.cost || 0).toFixed(2)}${b ? ` of your $${b.limit} budget` : ''}`],
       ['Busiest day', w.busiestDay || '—'],
       ['Busiest hour', w.busiestHour != null ? `${w.busiestHour}:00` : '—'],
       ['Models', (w.models || []).map(modelShort).join(' · ') || '—'],
+      ['Cache hit rate', w.cacheHitRatio != null ? `${Math.round(w.cacheHitRatio * 100)}% of input tokens served from cache` : 'not enough data yet'],
       ['Your typical reply time', w.typicalWait ? `${w.typicalWait} (${waitTotal} prompts measured)` : 'not enough data yet'],
     ];
     weekReport = { w, b, rows };
