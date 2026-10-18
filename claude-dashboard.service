@@ -1,5 +1,5 @@
 [Unit]
-Description=Claude Dashboard — local dashboard for Claude Code sessions
+Description=Claude Mission Control — local dashboard for Claude Code sessions
 After=default.target
 
 [Service]

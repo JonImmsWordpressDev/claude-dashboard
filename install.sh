@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install the Claude Dashboard as an always-on service that starts at login:
+# Install the Claude Mission Control as an always-on service that starts at login:
 # a LaunchAgent on macOS, a systemd user unit on Linux.
 set -euo pipefail
 

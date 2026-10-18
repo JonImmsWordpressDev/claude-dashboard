@@ -2073,3 +2073,113 @@ test('toolSummary totals all tools, sorts and caps byName, tolerates missing sta
   assert.equal(toolSummary(undefined), null);
   assert.equal(toolSummary({}), null);
 });
+
+// --- limit forecast ---
+const { WINDOWS, toMs, recordSample, forecastWindow, shouldAlert, durationLabel } = require('../lib/forecast');
+
+test('toMs accepts ISO strings, epoch seconds and epoch ms; null for junk', () => {
+  assert.equal(toMs('2026-08-14T01:19:59Z'), Date.parse('2026-08-14T01:19:59Z'));
+  assert.equal(toMs(1786660604), 1786660604000);
+  assert.equal(toMs('1786660604000'), 1786660604000);
+  assert.equal(toMs('2pm'), null);
+  assert.equal(toMs(null), null);
+});
+
+test('recordSample spaces samples five minutes apart and restarts on a new window or a drop', () => {
+  const t0 = Date.parse('2026-10-18T10:00:00Z');
+  const reset = '2026-10-18T14:00:00Z';
+  let s = recordSample([], 10, reset, t0, 3600_000);
+  s = recordSample(s, 11, reset, t0 + 60_000, 3600_000); // too soon
+  assert.equal(s.length, 1);
+  s = recordSample(s, 12, reset, t0 + 5 * 60_000, 3600_000);
+  assert.equal(s.length, 2);
+  assert.equal(recordSample(s, 3, reset, t0 + 10 * 60_000, 3600_000).length, 1); // dropped: new window
+  assert.equal(recordSample(s, 20, '2026-10-18T19:00:00Z', t0 + 10 * 60_000, 3600_000).length, 1); // new resetsAt
+  assert.equal(recordSample(s, null, reset, t0 + 10 * 60_000, 3600_000), s);
+  assert.equal(recordSample(s, 30, reset, t0 + 2 * 3600_000, 3600_000).length, 1); // old ones pruned
+});
+
+test('forecastWindow falls back to the average since the window opened', () => {
+  const reset = Date.parse('2026-10-18T15:00:00Z'); // 5h window opened 10:00
+  const now = Date.parse('2026-10-18T12:00:00Z'); // 2h in, 60% used -> 30%/h
+  const f = forecastWindow({ ...WINDOWS.session, utilization: 60, resetsAt: reset, now });
+  assert.equal(f.basis, 'average');
+  assert.equal(f.projected, 150);
+  assert.equal(f.hitAt, Date.parse('2026-10-18T13:20:00Z'));
+  assert.equal(f.resetsAt, reset);
+});
+
+test('forecastWindow prefers the recent pace, and says nothing hits when the reset comes first', () => {
+  const reset = Date.parse('2026-10-18T15:00:00Z');
+  const now = Date.parse('2026-10-18T12:00:00Z');
+  const samples = [{ at: now - 30 * 60_000, utilization: 58, resetsAt: reset }]; // 4%/h lately
+  const f = forecastWindow({ ...WINDOWS.session, utilization: 60, resetsAt: reset, samples, now });
+  assert.equal(f.basis, 'recent');
+  assert.equal(f.hitAt, null);
+  assert.equal(f.projected, 72);
+});
+
+test('forecastWindow returns null too early, past reset, or without data; hitAt is rounded at 100%', () => {
+  const reset = Date.parse('2026-10-18T15:00:00Z');
+  assert.equal(forecastWindow({ ...WINDOWS.session, utilization: 5, resetsAt: reset, now: Date.parse('2026-10-18T10:05:00Z') }), null);
+  assert.equal(forecastWindow({ ...WINDOWS.session, utilization: 50, resetsAt: reset, now: reset + 1 }), null);
+  assert.equal(forecastWindow({ ...WINDOWS.session, utilization: null, resetsAt: reset, now: reset - 3600_000 }), null);
+  assert.equal(forecastWindow({ ...WINDOWS.session, utilization: 40, resetsAt: '2pm', now: reset - 3600_000 }), null);
+  const full = forecastWindow({ ...WINDOWS.session, utilization: 100, resetsAt: reset, now: Date.parse('2026-10-18T13:03:10Z') });
+  assert.equal(full.hitAt, Date.parse('2026-10-18T13:00:00Z'));
+});
+
+test('shouldAlert needs a hit before reset, at least 50% used, under 100%, once per window', () => {
+  const f = { hitAt: 1, utilization: 60, resetsAt: 99 };
+  assert.equal(shouldAlert(f, null), true);
+  assert.equal(shouldAlert(f, 99), false);
+  assert.equal(shouldAlert({ ...f, utilization: 40 }, null), false);
+  assert.equal(shouldAlert({ ...f, utilization: 100 }, null), false);
+  assert.equal(shouldAlert({ ...f, hitAt: null }, null), false);
+  assert.equal(shouldAlert(null, null), false);
+});
+
+test('durationLabel reads as minutes, hours, or days', () => {
+  assert.equal(durationLabel(35 * 60_000), '35m');
+  assert.equal(durationLabel(70 * 60_000), '1h 10m');
+  assert.equal(durationLabel(3 * 3600_000), '3h');
+  assert.equal(durationLabel(52 * 3600_000), '2d 4h');
+  assert.equal(durationLabel(-5), '0m');
+});
+
+// --- share card plan value ---
+const { planValue } = require('../lib/pricing');
+
+test('planValue gives a weekly price and multiple on known subscriptions only', () => {
+  assert.deepEqual(planValue({ label: 'Max 20x', billing: 'stripe_subscription' }, 143.2), { label: 'Max 20x', weeklyPrice: 46.15, multiple: 3.1 });
+  assert.deepEqual(planValue({ label: 'Pro', billing: null }, 0), { label: 'Pro', weeklyPrice: 4.62, multiple: null });
+  assert.deepEqual(planValue({ label: 'Team', billing: null }, 50), { label: 'Team', weeklyPrice: null, multiple: null });
+  assert.equal(planValue({ label: 'API', billing: 'api' }, 50), null);
+  assert.equal(planValue(null, 50), null);
+});
+
+// --- statusline ---
+const { formatStatusline } = require('../lib/statusline');
+
+test('formatStatusline without the dashboard shows model, context, 5h limit and cost', () => {
+  const input = { session_id: 'me', model: { display_name: 'Opus 5.5' }, context_window: { used_percentage: 41.4 }, rate_limits: { five_hour: { used_percentage: 23 }, seven_day: { used_percentage: 12 } }, cost: { total_cost_usd: 3.204 } };
+  assert.equal(formatStatusline(input, null, { color: false }), 'Opus 5.5 · ctx 41% · 5h 23% · $3.20');
+});
+
+test('formatStatusline adds other waiting sessions and the forecast from the dashboard', () => {
+  const hitAt = new Date(2026, 9, 18, 15, 40).getTime();
+  const input = { session_id: 'me', model: { display_name: 'Opus 5.5' }, rate_limits: { five_hour: { used_percentage: 64 }, seven_day: { used_percentage: 55 } } };
+  const state = {
+    liveSessions: [{ sessionId: 'me', status: 'waiting', projectName: 'Self' }, { sessionId: 'a', status: 'waiting', projectName: 'Acme' }, { sessionId: 'b', status: 'busy' }],
+    forecast: { session: { hitAt }, week: { hitAt: null } },
+  };
+  const time = new Date(hitAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  assert.equal(formatStatusline(input, state, { color: false }), `❯ Acme needs you · Opus 5.5 · 5h 64% → ${time} · week 55%`);
+  state.liveSessions.push({ sessionId: 'c', status: 'waiting', projectName: 'Blog' });
+  assert.match(formatStatusline(input, state, { color: false }), /^❯ 2 sessions need you · /);
+});
+
+test('formatStatusline tolerates empty input and colours amber only when asked', () => {
+  assert.equal(formatStatusline({}, null, { color: false }), '');
+  assert.match(formatStatusline({ context_window: { used_percentage: 80 } }, null), /\x1b\[33mctx 80%/);
+});

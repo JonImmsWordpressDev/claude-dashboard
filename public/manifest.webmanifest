@@ -1,6 +1,6 @@
 {
-  "name": "Claude Dashboard",
-  "short_name": "Claude Dash",
+  "name": "Claude Mission Control",
+  "short_name": "Mission Control",
   "description": "Local dashboard for Claude Code: live sessions, transcripts, costs, git status.",
   "start_url": "/",
   "display": "standalone",

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Remove the Claude Dashboard service (LaunchAgent on macOS, systemd user unit on Linux).
+# Remove the Claude Mission Control service (LaunchAgent on macOS, systemd user unit on Linux).
 set -euo pipefail
 
 LABEL="com.claude-dashboard"

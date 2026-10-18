@@ -1,4 +1,4 @@
-# Install Claude Dashboard on Windows (EXPERIMENTAL — testers wanted).
+# Install Claude Mission Control on Windows (EXPERIMENTAL — testers wanted).
 # Registers a logon Scheduled Task that runs the server hidden.
 # Run from the repo folder in PowerShell:  .\install.ps1
 $ErrorActionPreference = 'Stop'

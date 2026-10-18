@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Claude Dashboard</title>
+<title>Claude Mission Control</title>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -241,6 +241,7 @@
   .meter .fill { height: 100%; border-radius: 3px; background: var(--accent); }
   .meter .fill.hot { background: var(--warn); }
   .meter .fill.crit { background: var(--bad); }
+  .meter .eta { color: var(--warn); white-space: nowrap; }
 
   /* ---------- live rail: the departures rows ---------- */
   #live {
@@ -986,13 +987,34 @@ function weeklyChart(weeks) {
     aria-label="${esc(costWording().noun)} per week, last 8 weeks">${bars}</svg>`;
 }
 
-function meter(label, pct, title) {
+function meter(label, pct, title, extra = '') {
   const cls = pct >= 90 ? 'crit' : pct >= 75 ? 'hot' : '';
   return `<div class="meter" title="${esc(title || '')}">
     <span>${esc(label)}</span>
     <span class="bar"><span class="fill ${cls}" style="width:${Math.min(100, pct)}%"></span></span>
-    <span>${Math.round(pct)}%</span>
+    <span>${Math.round(pct)}%</span>${extra}
   </div>`;
+}
+
+// Limit forecast for a usage meter: an amber "→ 3:40 PM" when the current
+// pace runs out before the reset, and the projection in the tooltip.
+function forecastMeter(label, pct, resetsRaw, f) {
+  const sameDay = (ms) => new Date(ms).toDateString() === new Date().toDateString();
+  const when = (ms) => (sameDay(ms) ? '' : new Date(ms).toLocaleDateString(undefined, { weekday: 'short' }) + ' ') + fmtWhen(ms);
+  const parsed = Date.parse(resetsRaw);
+  const resetAt = resetsRaw ? (Number.isFinite(parsed) ? when(parsed) : resetsRaw) : '';
+  const resets = resetAt ? 'resets ' + resetAt : '';
+  if (!f) return meter(label, pct, resets);
+  const pace = f.basis === 'recent' ? 'at your recent pace' : 'at your average pace this window';
+  if (!f.hitAt) {
+    return meter(label, pct, `${resets} · ${pace}, about ${f.projected}% by then`);
+  }
+  const early = Math.max(0, Math.round((f.resetsAt - f.hitAt) / 60000));
+  const earlyTxt = early >= 1440 ? `${Math.floor(early / 1440)}d ${Math.floor((early % 1440) / 60)}h` : early >= 60 ? `${Math.floor(early / 60)}h ${early % 60}m` : `${early}m`;
+  const title = f.utilization >= 100
+    ? `limit reached · ${resets}`
+    : `${pace}, you hit 100% around ${when(f.hitAt)}, ${earlyTxt} before the reset${resetAt ? ' at ' + resetAt : ''}`;
+  return meter(label, pct, title, `<span class="eta">→ ${esc(when(f.hitAt))}</span>`);
 }
 
 // One display line for what a waiting session needs: glyph + 80-char text,
@@ -1335,8 +1357,8 @@ function render(state) {
   if (q) {
     qEl.className = q.stale ? 'stale' : '';
     patch(qEl, spendChip +
-      (q.utilization != null ? meter('session', q.utilization, q.resetsAt ? 'resets ' + q.resetsAt : '') : '') +
-      (q.weeklyUtilization != null ? meter('week', q.weeklyUtilization, q.weeklyResetsAt ? 'resets ' + q.weeklyResetsAt : '') : '') +
+      (q.utilization != null ? forecastMeter('session', q.utilization, q.resetsAt, state.forecast && state.forecast.session) : '') +
+      (q.weeklyUtilization != null ? forecastMeter('week', q.weeklyUtilization, q.weeklyResetsAt, state.forecast && state.forecast.week) : '') +
       (q.costUsed != null && q.costLimit ? `<span title="extra usage">$${q.costUsed.toFixed(0)}/$${q.costLimit.toFixed(0)}</span>` : ''));
   } else {
     qEl.className = '';
@@ -1367,7 +1389,7 @@ function render(state) {
   patch($('#grid'), active.length || dormant.length
     ? active.map(projectCard).join('')
     : `<div id="welcome">
-        <h2><span class="tilde">❯</span> Welcome to Claude Dashboard</h2>
+        <h2><span class="tilde">❯</span> Welcome to Claude Mission Control</h2>
         <p>No Claude Code projects found yet. Run <code>claude</code> in any folder and it appears here automatically — live status, transcripts, git state, costs, the lot.</p>
         <p>Tip: press <code>⌘K</code> to jump anywhere, <code>/</code> to search, and click ⚙ for settings.</p>
       </div>`);
@@ -1384,9 +1406,9 @@ function render(state) {
     : 'Settings';
 
   const waiting = live.filter((s) => s.status === 'waiting').length;
-  document.title = waiting ? `(${waiting} waiting) Claude Dashboard`
-    : live.length ? `(${live.length} running) Claude Dashboard`
-    : 'Claude Dashboard';
+  document.title = waiting ? `(${waiting} waiting) Claude Mission Control`
+    : live.length ? `(${live.length} running) Claude Mission Control`
+    : 'Claude Mission Control';
 }
 
 function toast(msg) {
@@ -2903,7 +2925,7 @@ async function openWeekReport() {
       ['Cache hit rate', w.cacheHitRatio != null ? `${Math.round(w.cacheHitRatio * 100)}% of input tokens served from cache` : 'not enough data yet'],
       ['Your typical reply time', w.typicalWait ? `${w.typicalWait} (${waitTotal} prompts measured)` : 'not enough data yet'],
     ];
-    weekReport = { w, b, rows };
+    weekReport = { w, b, rows, days: (s.costDays || []).slice(-7) };
     const table = `<table class="stat-table">${rows.map(([k, v]) =>
       `<tr><td>${esc(k)}</td><td style="text-align:right">${esc(v)}</td></tr>`).join('')}</table>`;
     const projRows = (w.projects || []).map((p) =>
@@ -2911,11 +2933,118 @@ async function openWeekReport() {
     $('#d-body').innerHTML =
       dSection('The week', table) +
       dSection('Where it went', projRows ? `<table class="stat-table">${projRows}</table>` : null, 'No spend recorded this week.') +
+      dSection('Share card', '<img id="share-card" alt="Your week with Claude as an image" style="width:100%;border-radius:6px;border:1px solid var(--line)">' +
+        '<div class="set-sub" style="margin-top:6px">Totals only. No project names or prompts.</div>' +
+        '<div style="margin-top:10px;display:flex;gap:8px"><button class="copy" data-card-download>download PNG ⇩</button><button class="copy" data-card-copy>copy image</button></div>') +
       '<div style="margin-top:16px"><button class="copy" data-week-export>download as markdown ⇩</button></div>';
+    renderShareCard().then((url) => { const img = $('#share-card'); if (img) img.src = url; }).catch(() => {});
   } catch {
     $('#d-body').innerHTML = '<div class="d-empty" style="padding:20px 0">Couldn\'t load the report.</div>';
   }
 }
+
+// ---------- share card: the week as a 1200×630 PNG ----------
+// Always drawn in the dark departures palette so shared cards look alike.
+const CARD = { w: 1200, h: 630, bg: '#0d1215', flap: '#151d22', flapHi: '#1c262c', split: 'rgba(0,0,0,0.45)', ink: '#e9e4d6', muted: '#93a09e', faint: '#5d6b6b', line: '#202b31', green: '#46c073', amber: '#ffb020' };
+let shareCanvas = null;
+
+async function renderShareCard() {
+  const { w, days } = weekReport;
+  await Promise.all(['700 140px Oswald', '500 20px "JetBrains Mono"'].map((f) => document.fonts.load(f).catch(() => {})));
+  const c = document.createElement('canvas');
+  c.width = CARD.w * 2;
+  c.height = CARD.h * 2;
+  const g = c.getContext('2d');
+  g.scale(2, 2);
+  const oswald = (px, wt = 600) => `${wt} ${px}px Oswald, "Arial Narrow", sans-serif`;
+  const mono = (px, wt = 500) => `${wt} ${px}px "JetBrains Mono", ui-monospace, monospace`;
+  const text = (s, x, y, font, color, align = 'left', spacing = 0) => {
+    g.font = font; g.fillStyle = color; g.textAlign = align;
+    if ('letterSpacing' in g) g.letterSpacing = `${spacing}px`;
+    g.fillText(s, x, y);
+    if ('letterSpacing' in g) g.letterSpacing = '0px';
+  };
+  const flap = (x, y, fw, fh) => {
+    g.fillStyle = CARD.flap; g.beginPath(); g.roundRect(x, y, fw, fh, 6); g.fill();
+    g.fillStyle = CARD.flapHi; g.beginPath(); g.roundRect(x, y, fw, fh / 2, [6, 6, 0, 0]); g.fill();
+    g.fillStyle = CARD.split; g.fillRect(x, y + fh / 2 - 0.5, fw, 1.5);
+  };
+
+  g.fillStyle = CARD.bg; g.fillRect(0, 0, CARD.w, CARD.h);
+
+  // header
+  const end = new Date();
+  const start = new Date(end.getTime() - 6 * 86400000);
+  const md = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  text('❯ MY WEEK WITH CLAUDE CODE', 64, 92, oswald(30), CARD.amber, 'left', 2);
+  text(`${md(start)} – ${md(end)}, ${end.getFullYear()}`, CARD.w - 64, 90, mono(18), CARD.muted, 'right');
+  g.fillStyle = CARD.line; g.fillRect(64, 116, CARD.w - 128, 2);
+
+  // the number
+  const cost = w.cost || 0;
+  const money = cost >= 10 ? Math.round(cost).toLocaleString() : cost.toFixed(2);
+  const pv = w.planValue;
+  text(pv ? 'LIST-PRICE VALUE' : 'ESTIMATED COST', 64, 172, mono(16), CARD.muted, 'left', 2);
+  text(`≈$${money}`, 58, 312, oswald(150, 700), CARD.ink);
+  if (pv && pv.multiple >= 1.1) text(`${pv.multiple}× the ${pv.label} plan's weekly price`, 64, 358, mono(22), CARD.amber);
+  else if (pv) text(`on the ${pv.label} plan`, 64, 358, mono(22), CARD.muted);
+
+  // daily bars
+  const bx = 700, by = 150, bw = 436, bh = 200;
+  const max = Math.max(...days.map((d) => d.cost), 0.01);
+  const slot = bw / 7;
+  const busiest = days.reduce((i, d, j) => (d.cost > days[i].cost ? j : i), 0);
+  days.forEach((d, i) => {
+    const x = bx + i * slot + 8;
+    const colW = slot - 16;
+    flap(x, by, colW, bh);
+    const fh = d.cost > 0 ? Math.max(4, (d.cost / max) * (bh - 8)) : 0;
+    g.fillStyle = i === busiest && d.cost > 0 ? CARD.amber : CARD.green;
+    g.beginPath(); g.roundRect(x + 4, by + bh - 4 - fh, colW - 8, fh, 3); g.fill();
+    text(new Date(d.t).toLocaleDateString(undefined, { weekday: 'narrow' }), x + colW / 2, by + bh + 28, mono(16), CARD.muted, 'center');
+  });
+
+  // stat flaps
+  const stats = [
+    ['SESSIONS', String(w.sessions ?? 0)],
+    ['PROMPTS', String(w.prompts ?? 0)],
+    ['CACHE HITS', w.cacheHitRatio != null ? `${Math.round(w.cacheHitRatio * 100)}%` : '—'],
+    ['BUSIEST', w.busiestDay ? w.busiestDay.slice(0, 3) + (w.busiestHour != null ? ` ${w.busiestHour}:00` : '') : '—'],
+  ];
+  const sw = (CARD.w - 128 - 3 * 20) / 4;
+  stats.forEach(([label, value], i) => {
+    const x = 64 + i * (sw + 20);
+    flap(x, 410, sw, 110);
+    text(value, x + 22, 476, oswald(46, 600), CARD.ink);
+    text(label, x + 22, 506, mono(13), CARD.muted, 'left', 2);
+  });
+
+  // footer
+  text((w.models || []).map(modelShort).join(' · '), 64, 578, mono(16), CARD.faint);
+  text('npx claude-mission-control', CARD.w - 64, 578, mono(16), CARD.muted, 'right');
+
+  shareCanvas = c;
+  return c.toDataURL('image/png');
+}
+
+document.addEventListener('click', async (e) => {
+  if (!shareCanvas) return;
+  if (e.target.closest('[data-card-download]')) {
+    const a = document.createElement('a');
+    a.href = shareCanvas.toDataURL('image/png');
+    a.download = `week-with-claude-${new Date().toISOString().slice(0, 10)}.png`;
+    a.click();
+    toast('Card downloaded');
+  } else if (e.target.closest('[data-card-copy]')) {
+    try {
+      const blob = await new Promise((r) => shareCanvas.toBlob(r, 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      toast('Card copied, paste it anywhere');
+    } catch {
+      toast('Copy not supported here, use download');
+    }
+  }
+});
 
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-week]')) { openWeekReport(); return; }
@@ -2942,7 +3071,7 @@ document.addEventListener('click', async (e) => {
   try {
     const r = await fetch(`/api/session?id=${encodeURIComponent(exportableSession.id)}`);
     const t = await r.json();
-    const lines = [`# ${t.title}`, '', `_${t.projectName} — exported from Claude Dashboard, ${new Date().toLocaleString()}_`, ''];
+    const lines = [`# ${t.title}`, '', `_${t.projectName} — exported from Claude Mission Control, ${new Date().toLocaleString()}_`, ''];
     for (const ev of t.events) {
       if (ev.kind === 'user') lines.push(`**You:** ${ev.text}`, '');
       else if (ev.kind === 'assistant') lines.push(ev.text, '');

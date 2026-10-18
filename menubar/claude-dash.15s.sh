@@ -1,6 +1,6 @@
 #!/bin/bash
-# SwiftBar plugin for the Claude Dashboard. Refreshes every 15s (filename).
-# <swiftbar.title>Claude Dashboard</swiftbar.title>
+# SwiftBar plugin for the Claude Mission Control. Refreshes every 15s (filename).
+# <swiftbar.title>Claude Mission Control</swiftbar.title>
 # <swiftbar.hideAbout>true</swiftbar.hideAbout>
 # <swiftbar.hideRunInTerminal>true</swiftbar.hideRunInTerminal>
 # <swiftbar.hideDisablePlugin>true</swiftbar.hideDisablePlugin>

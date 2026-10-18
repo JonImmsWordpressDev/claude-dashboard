@@ -1,0 +1,12 @@
+{
+  "name": "jonimms",
+  "description": "Jon Imms's tools for Claude Code",
+  "owner": { "name": "Jon Imms", "url": "https://github.com/JonImmsWordpressDev" },
+  "plugins": [
+    {
+      "name": "mission-control",
+      "source": "./plugin",
+      "description": "Open the Mission Control dashboard for every Claude Code session on this machine, and add a statusline that shows sessions waiting on you and your limit forecast."
+    }
+  ]
+}

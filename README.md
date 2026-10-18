@@ -1,8 +1,8 @@
-# Claude Dashboard
+# Claude Mission Control
 
 One web page that shows you everything Claude Code is doing on your machine.
 
-Claude Code runs in a terminal. Once you have two or three sessions going, you lose track. Which one is waiting for an answer? What did that session change while you were away? How much has this week cost? Claude Dashboard answers those questions on one screen, updated live, from the files Claude Code already writes to `~/.claude`.
+Claude Code runs in a terminal. Once you have two or three sessions going, you lose track. Which one is waiting for an answer? What did that session change while you were away? How much has this week cost? Claude Mission Control answers those questions on one screen, updated live, from the files Claude Code already writes to `~/.claude`.
 
 **What you get**
 
@@ -13,6 +13,7 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 - Cost per session, project, model, and week, estimated from the tokens in your transcripts, with a breakdown by model and cache use.
 - Per project, the plugins, agents, skills, and MCP servers Claude Code would actually use there, and the exact setting to switch each one on or off.
 - A macOS notification the moment a session needs you, and a reminder if you leave it waiting.
+- When you will hit your 5-hour or weekly limit at your current pace, before you hit it.
 
 **Why you would want it**
 
@@ -26,9 +27,16 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 **Requirements:** macOS or Linux (Windows experimental, see below), Node.js ≥ 18, Claude Code.
 
-![Claude Dashboard, dark mode: three live sessions with live cost, burn rate and context meters, two of them waiting with the question shown, plus the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
+![Claude Mission Control, dark mode: three live sessions with live cost, burn rate and context meters, two of them waiting with the question shown, plus the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
+
+**New in 1.12.0**
+
+- A limit forecast on the session and week meters: an amber `→ 3:40 PM` when your current pace runs out before the reset, and one notification per window.
+- A share card for your week: a PNG with totals, daily bars, and what your usage was worth against your plan's price. Totals only, no project names.
+- A Claude Code plugin: `/plugin install mission-control --marketplace JonImmsWordpressDev/claude-dashboard`, then `/mission-control:open`.
+- A statusline, `claude-dashboard statusline`: model, context, limits and cost, plus sessions waiting on you and the forecast when the dashboard is up.
 
 **New in 1.11.0**
 
@@ -63,6 +71,33 @@ brew tap jonimmswordpressdev/claude-dashboard
 brew trust jonimmswordpressdev/claude-dashboard   # newer brew asks once for third-party taps
 brew install claude-dashboard
 brew services start claude-dashboard   # always-on, starts at login
+```
+
+## Claude Code plugin
+
+Install it from inside Claude Code:
+
+```
+/plugin install mission-control --marketplace JonImmsWordpressDev/claude-dashboard
+```
+
+On Claude Code older than 2.1.275, add the marketplace first: `/plugin marketplace add JonImmsWordpressDev/claude-dashboard`, then `/plugin install mission-control@jonimms`.
+
+- `/mission-control:open` starts the dashboard if it isn't running (your global install, or npx) and opens it.
+- `/mission-control:statusline` sets up the statusline below. It checks your installed version first and shows the setting to add.
+
+## Statusline
+
+`claude-dashboard statusline` prints one line for Claude Code's status bar:
+
+```
+❯ acme-storefront needs you · Opus 5.5 · ctx 41% · 5h 64% → 3:40 PM · $3.20
+```
+
+Model, context use, your 5-hour limit, and this session's cost come from Claude Code itself. When the dashboard is running, the line also names other sessions waiting on you and shows the limit forecast in amber. If the dashboard is down, you get the rest of the line and no delay. It needs a global install (npm or Homebrew), not npx. Add it to `~/.claude/settings.json`:
+
+```json
+{ "statusLine": { "type": "command", "command": "claude-dashboard statusline", "padding": 0 } }
 ```
 
 ## Install (always-on)
@@ -129,7 +164,7 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Search** — the header box searches every prompt you've ever sent plus all session titles (Enter to run, 2+ characters). Narrow with `project:name` or `since:7d` / `since:2026-08-01`. Clicking a prompt result opens the transcript scrolled to the matching turn. If the answer isn't in a prompt, **search inside full transcripts** runs the same query across the conversation bodies — slower, so it's a second click rather than the default.
 - **Command palette** — `⌘K` from anywhere: fuzzy-jump to any project or session, watch a live session, start a new one, open settings or stats. Arrow keys + Enter.
 - **Stats** — click the weekly bar chart in the header: a 26-week activity heatmap, your busiest hours, a weekly-rhythm grid (prompts by day of week and hour), estimated cost per day for the last 90 days (list-price value on a subscription), and an all-time per-model token/cost breakdown. The daily cost history is computed from your existing transcripts, so it's full from the first run.
-- **Your week with Claude** — a 7-day report (`⌘K`, or the button at the top of stats): sessions, prompts, estimated cost (list-price value on a subscription) against your budget, busiest day and hour, models used, how long you typically take to answer a question, and your cache hit rate. Exports as markdown.
+- **Your week with Claude** — a 7-day report (`⌘K`, or the button at the top of stats): sessions, prompts, estimated cost (list-price value on a subscription) against your budget, busiest day and hour, models used, how long you typically take to answer a question, and your cache hit rate. Exports as markdown, or as a share card: a 1200×630 PNG with your week's totals, daily bars, and, on Pro or Max, how many times the plan's weekly price that usage was worth at list price. Download it or copy it straight to the clipboard. The card shows totals only, never project names or prompts.
 - **Day timeline** — `⌘K` → Day timeline: the last 24 hours as one lane per project, with amber ticks where a session needed you.
 - **Catch-up** — the `🔔` in the header keeps every notification the server has fired since it started, with an unread count. Useful after a morning away from the desk.
 - **Export** — any transcript downloads as clean markdown via the `export ⇩` button.
@@ -163,6 +198,7 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Session cost breakdown** — the `≈$ ▾` button in a transcript's header opens a table by model (input, output, cache read, cache write), the subagent share, and the session's cache hit rate.
 - **Context and tools** — each live session shows how full its context window was on the last turn (`412k / 1M`, amber from 70%, red from 90%), so you can see a compaction or a fresh session coming. Mission Control panes add the session's tool-call count with failures in amber, and the transcript's cost panel shows the same count in its footer. Read from the same incremental transcript scan as everything else; subagents are not included.
 - **Most expensive sessions** — in the stats view: the ten costliest sessions all time, click to open.
+- **Limit forecast** — the session and week meters project your current pace forward. When it runs out before the window resets, the meter shows an amber `→ 3:40 PM` (or `→ Thu 2:15 PM` for the week), and the tooltip says how early. Otherwise the tooltip shows where you will land by the reset. Pace is your last 30 minutes (5-hour window) or 24 hours (week) once the dashboard has watched that long, and the average since the window opened before that. One notification per window, once you are past 50% and on pace to run out.
 - **Stuck flag** — a session that's "busy" but has written nothing to its transcript for 10+ minutes gets an amber `quiet Nm` cell; at 20 minutes you get one notification. It's a hint, not a verdict — a session waiting on slow background work can look the same.
 - **Idle reminder** — a session left on **needs you** for an hour (configurable in settings, `0` to turn off) gets one more notification and a `still waiting` entry in the catch-up bell, and its elapsed cell turns amber with the wait time. Nothing repeats until you answer it.
 

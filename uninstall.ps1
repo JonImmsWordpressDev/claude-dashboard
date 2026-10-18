@@ -1,4 +1,4 @@
-# Remove the Claude Dashboard Scheduled Task (Windows).
+# Remove the Claude Mission Control Scheduled Task (Windows).
 schtasks /End /TN 'ClaudeDashboard' 2>$null | Out-Null
 schtasks /Delete /TN 'ClaudeDashboard' /F 2>$null | Out-Null
 Get-Process -Name node -ErrorAction SilentlyContinue |
