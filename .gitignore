@@ -13,3 +13,6 @@ chats.json
 
 # static demo build output (scripts/build-demo.js)
 site/
+
+# launch drafts — never published
+LAUNCH.md

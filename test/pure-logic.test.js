@@ -2183,3 +2183,36 @@ test('formatStatusline tolerates empty input and colours amber only when asked',
   assert.equal(formatStatusline({}, null, { color: false }), '');
   assert.match(formatStatusline({ context_window: { used_percentage: 80 } }, null), /\x1b\[33mctx 80%/);
 });
+
+// --- background jobs (Agent View) ---
+const { normalizeJob, jobAttention, onlyHereArgs } = require('../lib/jobs');
+
+test('normalizeJob keeps what the board needs and converts ISO times', () => {
+  const j = normalizeJob('13668958', {
+    state: 'done', detail: "replied 'ok' as asked", name: 'ok reply', intent: 'Reply ok', sessionId: 's1',
+    cwd: '/repo', worktreePath: '/repo/.claude/worktrees/bgprobe', worktreeBranch: 'worktree-bgprobe',
+    createdAt: '2026-10-18T14:51:38.443Z', updatedAt: '2026-10-18T14:51:46.017Z', tokens: 18, providerEnv: { SECRET: 'x' },
+  });
+  assert.equal(j.jobId, '13668958');
+  assert.equal(j.updatedAt, Date.parse('2026-10-18T14:51:46.017Z'));
+  assert.equal(j.worktreeBranch, 'worktree-bgprobe');
+  assert.equal('providerEnv' in j, false);
+  assert.equal(normalizeJob('x', { state: 'done' }), null); // no session id
+  assert.equal(normalizeJob('x', null), null);
+});
+
+test('onlyHereArgs excludes the branch by short name (git rejects refs/heads/ here)', () => {
+  assert.deepEqual(onlyHereArgs('/wt', 'worktree-a'),
+    ['-C', '/wt', 'rev-list', '--count', 'HEAD', '--not', '--exclude=worktree-a', '--branches', '--remotes']);
+  assert.deepEqual(onlyHereArgs('/wt', null), ['-C', '/wt', 'rev-list', '--count', 'HEAD', '--not', '--branches', '--remotes']);
+});
+
+test('jobAttention flags uncommitted files or branch-only commits, nothing otherwise', () => {
+  const job = { jobId: 'j', sessionId: 's', name: 'fix login', worktreePath: '/repo/.claude/worktrees/fix', worktreeBranch: 'worktree-fix' };
+  assert.deepEqual(jobAttention(job, { exists: true, changes: 2, onlyHere: 3 }),
+    { jobId: 'j', sessionId: 's', name: 'fix login', worktree: 'fix', branch: 'worktree-fix', changes: 2, onlyHere: 3 });
+  assert.equal(jobAttention(job, { exists: true, changes: 0, onlyHere: 0 }), null);
+  assert.equal(jobAttention(job, { exists: false }), null);
+  assert.equal(jobAttention(job, { exists: true, error: true }), null);
+  assert.equal(jobAttention(job, undefined), null);
+});

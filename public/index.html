@@ -351,6 +351,7 @@
   .badge.dirty { color: var(--warn); }
   .badge.ahead { color: var(--accent); }
   .badge.err { color: var(--bad); }
+  .badge.bg { color: var(--accent); letter-spacing: 0.06em; }
   .badge.missing { color: var(--bad); }
   .note-mark { color: var(--warn); cursor: default; font-size: 12px; flex: none; }
   #note-editor { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 6px; }
@@ -1099,6 +1100,8 @@ function copyBtn(cmd) {
 
 // Live sessions are already open somewhere; only offer open on idle ones.
 let liveIds = new Set();
+let jobBySession = new Map(); // background jobs (Agent View), by session id
+const BG_TIP = 'Background session (claude --bg or Agent View)';
 function renameBtn(sessionId, title) {
   return `<button class="copy rename-btn" data-rename-session="${esc(sessionId)}" data-title="${esc(title || '')}" title="Rename this session">✎</button>`;
 }
@@ -1161,13 +1164,21 @@ function liveCard(s) {
   const reason = rl
     ? `<div class="dep-reason" title="${esc(rl.full)}">${rl.glyph ? `<span class="glyph">${rl.glyph}</span>` : ''}${esc(rl.short)}</div>`
     : '';
+  // Agent View's one-line summary of a background session, when nothing more specific shows.
+  const bgDetail = s.background && s.background.detail && !rl && !task
+    ? `<div class="dep-task mono" title="Agent View's summary"><span class="prompt-ch">↳</span>${esc(s.background.detail)}</div>`
+    : '';
+  const kindBadge = s.background
+    ? ` <span class="badge bg" title="${BG_TIP}">BG</span>`
+    : s.isWorktree ? ' <span class="badge">worktree</span>' : '';
   return `<div class="dep-row ${s.status === 'waiting' ? 'waiting' : ''}">
     <span class="dep-time" title="session started">${esc(dep)}</span>
-    <span class="dep-proj disp">${esc(s.projectName)}${s.isWorktree ? ' <span class="badge">worktree</span>' : ''}</span>
+    <span class="dep-proj disp">${esc(s.projectName)}${kindBadge}</span>
     <div class="dep-mid">
       <div class="dep-title" data-session="${esc(s.sessionId)}" title="Click to watch the transcript live">${esc(s.title || '')}</div>
       ${task}
       ${reason}
+      ${bgDetail}
     </div>
     <div class="dep-right">
       ${modelChip(s.model)}
@@ -1246,17 +1257,27 @@ function renderGitAttention(state) {
     if (!changes && !ahead) continue;
     items.push({ name: p.name, changes, ahead, when: p.lastActivityAt });
   }
-  if (!items.length) {
+  // Background jobs' worktrees: Agent View deletes the worktree with the session.
+  const atRisk = (state.jobs || []).filter((j) => j.atRisk).map((j) => ({ ...j.atRisk, projectName: j.projectName, when: j.updatedAt }));
+  if (!items.length && !atRisk.length) {
     el.hidden = true;
     return;
   }
   items.sort((a, b) => (b.when || 0) - (a.when || 0));
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   el.hidden = false;
   patch(el,
-    `<span class="ga-label">Unpushed work — ${items.length} repo${items.length === 1 ? '' : 's'}</span>` +
+    `<span class="ga-label">Unpushed work — ${[items.length && plural(items.length, 'repo'), atRisk.length && plural(atRisk.length, 'worktree')].filter(Boolean).join(', ')}</span>` +
     items.map((it) => `<span class="ga-item">${esc(it.name)}${
       it.changes ? `<span class="badge dirty" title="${it.changes} uncommitted/untracked files">●${it.changes}</span>` : ''}${
-      it.ahead ? `<span class="badge ahead" title="${it.ahead} commits not pushed">↑${it.ahead}</span>` : ''}</span>`).join(''));
+      it.ahead ? `<span class="badge ahead" title="${it.ahead} commits not pushed">↑${it.ahead}</span>` : ''}</span>`).join('') +
+    atRisk.map((w) => {
+      const parts = [w.onlyHere && `${plural(w.onlyHere, 'commit')} on ${w.branch || 'this branch'} and no other branch`, w.changes && plural(w.changes, 'uncommitted file')].filter(Boolean);
+      const tip = `Background job "${w.name}": ${parts.join(', ')}. Deleting the session from Agent View's list (ctrl+x twice) discards this; claude rm refuses until it is committed and pushed. Merge or push first.`;
+      return `<span class="ga-item" title="${esc(tip)}">${esc(w.projectName || '')} <span class="wt mono">⎇ ${esc(w.worktree)}</span><span class="badge bg" title="${BG_TIP}">BG</span>${
+        w.changes ? `<span class="badge dirty">●${w.changes}</span>` : ''}${
+        w.onlyHere ? `<span class="badge dirty">⑂${w.onlyHere}</span>` : ''}</span>`;
+    }).join(''));
 }
 
 // ---------- digest: what happened recently, across every project ----------
@@ -1289,11 +1310,14 @@ function digestItem(it) {
   const t = it.tasksSummary;
   const total = t ? t.completed + t.inProgress + t.pending : 0;
   const running = liveIds.has(it.sessionId);
+  const job = jobBySession.get(it.sessionId);
+  const summary = it.awaySummary || (job && job.detail);
   const time = new Date(it.lastActivityAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   return `<div class="digest-item">
     <div class="di-top">
       <span class="di-proj">${esc(it.project)}</span>
       <span class="di-title" data-session="${esc(it.sessionId)}" title="Click to read the transcript">${it.worktree ? `<span class="wt mono">⎇</span> ` : ''}${esc(it.title)}</span>${noteMark(it)}
+      ${job ? `<span class="badge bg" title="${BG_TIP}">BG</span>` : ''}
       ${running ? '<span class="flap disp st st-busy">running</span>' : ''}
       ${modelChip(it.model)}
       ${changesChip(it)}
@@ -1301,7 +1325,7 @@ function digestItem(it) {
       <span class="di-when">${time}</span>
       ${openBtn(it.sessionId)}
     </div>
-    ${it.awaySummary ? `<div class="di-summary" title="Click to expand">${esc(it.awaySummary)}</div>` : ''}
+    ${summary ? `<div class="di-summary" title="Click to expand">${esc(summary)}</div>` : ''}
     ${total ? `<div class="di-tasks"><span class="done">${t.completed}</span>/${total} tasks done${
       t.inProgress ? `, ${t.inProgress} in progress` : ''}${
       t.pending ? `, ${t.pending} left` : ''}</div>` : ''}
@@ -1337,6 +1361,7 @@ function render(state) {
   if (state.theme && state.theme !== 'board') document.documentElement.dataset.theme = state.theme;
   else delete document.documentElement.dataset.theme;
   liveIds = new Set((state.liveSessions || []).map((s) => s.sessionId));
+  jobBySession = new Map((state.jobs || []).map((j) => [j.sessionId, j]));
   // A transcript being followed live keeps its header cost in step with the board.
   if (follow.id && exportableSession?.id === follow.id && exportableSession.usage) {
     const live = (state.liveSessions || []).find((s) => s.sessionId === follow.id);

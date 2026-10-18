@@ -35,6 +35,11 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
 
+**New in 1.13.0**
+
+- Background sessions from `claude --bg` and Agent View carry a `BG` chip, the name Agent View gives them, and its one-line summary of what they did.
+- The unpushed strip warns when a background job's worktree holds uncommitted files or commits on no other branch. Deleting that session from Agent View's list would discard them.
+
 **New in 1.12.0**
 
 - A limit forecast on the session and week meters: an amber `→ 3:40 PM` when your current pace runs out before the reset, and one notification per window.
@@ -155,6 +160,7 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Departures** — every live `claude` CLI session as a row on the board: start time, project, current task, model, cost so far with a `$/h` burn rate, a context-window meter, elapsed time, and a split-flap status cell. The cell flips to an amber **needs you** when a session is waiting on your input — readable from across the room. A second line under the title says what it needs: `?` for a question Claude asked (with its options), `🔒` for a tool call awaiting permission (with the command or file), or the last question in Claude's reply, or failing that the first line of its final paragraph.
 - **Mission Control** — the `▦` button in the header (or `⌘K` → Mission Control) tiles every live session side by side, each pane following its own transcript. Each pane head shows the model, cost and burn rate, the context meter, and how many tool calls the session has made (failures in amber). One screen for "what is everything doing right now".
 - **Agents** — a session running subagents or an agent team shows them under its Mission Control pane: name, type, model, and a pulsing `●` while an agent has written in the last two minutes, `○` once it has gone quiet (idle teammates stay alive, so quiet is not finished), with the team name when there is one. Finished sessions list them at the top of the transcript.
+- **Background sessions** — sessions started with `claude --bg` or from Agent View (`claude agents`) carry a `BG` chip on the board and in the digest, go by the name Agent View gives them, and show Agent View's one-line summary of what they did. When a background job's worktree still holds work, the unpushed strip lists it: `●n` uncommitted files and `⑂n` commits on that branch and no other branch or remote. Deleting the session from Agent View's list (ctrl+x twice) discards that work, while `claude rm` refuses until it is committed and pushed, so merge or push first. Read from `~/.claude/jobs/`, which keeps finished jobs too.
 - **Pinned** — `☆ pin` on any transcript sticks that session to a strip under the departures board, so the thing you care about stays in view whether it's running or not.
 - **Digest** — what happened across every project, grouped by day. Each entry shows the session's recap (Claude's own "away summary" where one exists — click to expand), how many tasks it completed, and an open button. Switch the window between day / 3 days / week; collapses out of the way and remembers your choice.
 - **Project cards** — sorted by last activity. Branch chip, `●n` uncommitted changes, `↑n` unpushed commits. The sparkline is prompts per day for the last two weeks. Each session row has an `open ⬈` button that resumes the session in your terminal (new window, right directory) or imports it into the Claude desktop app when it's installed — the **Open in** selector in the header names whichever terminal you've configured (auto-detected on first run). The `⧉` button copies the `claude --resume` command instead.
