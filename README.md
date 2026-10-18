@@ -4,6 +4,8 @@ One web page that shows you everything Claude Code is doing on your machine.
 
 **[Try the live demo →](https://jonimmswordpressdev.github.io/claude-dashboard/)** Click around with invented projects and sessions before you install anything.
 
+![A session flips to NEEDS YOU on the board, a notification names the command waiting for permission, and one click opens the transcript at that request](docs/screenshots/demo.gif)
+
 Claude Code runs in a terminal. Once you have two or three sessions going, you lose track. Which one is waiting for an answer? What did that session change while you were away? How much has this week cost? Claude Mission Control answers those questions on one screen, updated live, from the files Claude Code already writes to `~/.claude`.
 
 **What you get**
@@ -29,7 +31,7 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 **Requirements:** macOS or Linux (Windows experimental, see below), Node.js ≥ 18, Claude Code.
 
-![Claude Mission Control, dark mode: three live sessions with live cost, burn rate and context meters, two of them waiting with the question shown, plus the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
+![Claude Mission Control, dark mode: three live sessions with live cost, burn rate and context meters, two of them waiting with the question shown, the limit forecast on the session meter, plus the pinned strip, unpushed work, and today's digest](docs/screenshots/dashboard-dark.png)
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
 
@@ -167,6 +169,9 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - **Command palette** — `⌘K` from anywhere: fuzzy-jump to any project or session, watch a live session, start a new one, open settings or stats. Arrow keys + Enter.
 - **Stats** — click the weekly bar chart in the header: a 26-week activity heatmap, your busiest hours, a weekly-rhythm grid (prompts by day of week and hour), estimated cost per day for the last 90 days (list-price value on a subscription), and an all-time per-model token/cost breakdown. The daily cost history is computed from your existing transcripts, so it's full from the first run.
 - **Your week with Claude** — a 7-day report (`⌘K`, or the button at the top of stats): sessions, prompts, estimated cost (list-price value on a subscription) against your budget, busiest day and hour, models used, how long you typically take to answer a question, and your cache hit rate. Exports as markdown, or as a share card: a 1200×630 PNG with your week's totals, daily bars, and, on Pro or Max, how many times the plan's weekly price that usage was worth at list price. Download it or copy it straight to the clipboard. The card shows totals only, never project names or prompts.
+
+![Share card: a week's list-price value as a multiple of the Max 20x plan's weekly price, daily bars, sessions, prompts, cache hit rate and busiest hour](docs/screenshots/share-card.png)
+
 - **Day timeline** — `⌘K` → Day timeline: the last 24 hours as one lane per project, with amber ticks where a session needed you.
 - **Catch-up** — the `🔔` in the header keeps every notification the server has fired since it started, with an unread count. Useful after a morning away from the desk.
 - **Export** — any transcript downloads as clean markdown via the `export ⇩` button.

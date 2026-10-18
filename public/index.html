@@ -209,6 +209,7 @@
   /* ---------- header: the station sign ---------- */
   header {
     display: flex; align-items: center; gap: 16px;
+    flex-wrap: wrap; row-gap: 10px;
     padding: 12px 20px;
     border-bottom: 2px solid var(--line);
     background: var(--surface);
@@ -394,6 +395,14 @@
   }
   #search:focus { outline: 2px solid var(--accent); outline-offset: 0; }
   #search::placeholder { color: var(--faint); }
+  /* A full set of meters needs ~1600px; tighten before the header wraps. */
+  @media (max-width: 1600px) {
+    header { gap: 12px; }
+    #search { width: 120px; }
+    #open-pref-wrap .open-label { display: none; }
+    #quota { gap: 12px; }
+    .meter .bar { width: 44px; }
+  }
   #gear, #mc-btn, #bell-btn {
     border: none; background: none; color: var(--muted); cursor: pointer;
     font-size: 15px; padding: 2px 6px; border-radius: 2px; margin-left: 4px;
@@ -831,10 +840,10 @@
 <header>
   <div id="conn" title="connection"></div>
   <h1>Claude<span class="tilde"> · </span>Mission Control</h1>
-  <input id="search" type="search" placeholder="Search sessions…  ⏎" autocomplete="off">
+  <input id="search" type="search" placeholder="Search…  ⏎" autocomplete="off">
   <div class="spacer"></div>
-  <label id="open-pref-wrap">Open in
-    <select id="open-pref">
+  <label id="open-pref-wrap"><span class="open-label">Open in</span>
+    <select id="open-pref" aria-label="Open sessions in">
       <option value="terminal">Terminal</option>
     </select>
   </label>
