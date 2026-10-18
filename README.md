@@ -35,6 +35,10 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
 
+**New in 1.14.0**
+
+- Cost per commit in each project's slide-over: every commit made during a Claude session shows its share of that session's cost, with a summary of cost per commit and spend in sessions that committed nothing.
+
 **New in 1.13.0**
 
 - Background sessions from `claude --bg` and Agent View carry a `BG` chip, the name Agent View gives them, and its one-line summary of what they did.
@@ -194,6 +198,7 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 ![Stats view: activity heatmap, busiest hours, weekly rhythm, 90-day spend, per-model costs, the most expensive sessions, and models by project](docs/screenshots/stats.png)
 
 - **Project details** — click any project's name for a slide-over with its full session list, recent git commits, rendered CLAUDE.md, per-project memory files, skills/agents/commands from `.claude/`, and settings (permissions, MCP servers, allowed tools), plus the resolved **Toolset** below. Read-only; also a quick audit of which projects are missing instructions or memory. Esc closes.
+- **Cost per commit** — in each project's slide-over, every commit made during a Claude session carries a `≈$` figure: that session's cost split evenly over the commits it made (±5 minutes of its activity). Hover for which session it came from. The line above the list sums it up: cost per commit, how many of the recent commits came from a Claude session, and what was spent in sessions that committed nothing. It's an even split, so a one-line version bump counts the same as a feature.
 - **Toolset** — inside the project slide-over: what Claude Code would actually use in that project. Every installed plugin, every agent and skill from the project, your user dir, and enabled plugins, and every MCP server that applies, each marked on or off with where it came from and which settings scope decided it, resolved with Claude Code's own precedence (managed › local › project › user, deny beats allow, project agents shadow user agents shadow plugin agents). An amber list at the top flags things worth a look: a plugin enabled but not installed or gone stale, a deny rule naming an agent that no longer exists, a server that needs auth, a settings file that doesn't parse. The `⧉` on a row copies the exact snippet to flip it, aimed at `.claude/settings.local.json`; MCP toggles live in Claude's own registry, so that recipe tells you to run `/mcp` in a session instead (servers from a project's `.mcp.json` also honour the settings keys `enabledMcpjsonServers`, `disabledMcpjsonServers` and `enableAllProjectMcpServers`, and their recipes use those). Buttons at the foot reveal the project's settings files in Finder. Read-only — the dashboard never edits Claude configuration.
 
 ![Toolset in the project slide-over: plugins, agents, skills and MCP servers marked on or off with their source and deciding settings scope, an amber warning for a plugin enabled but not installed, and buttons for the project's settings files](docs/screenshots/toolset.png)

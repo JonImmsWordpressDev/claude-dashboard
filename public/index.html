@@ -1607,6 +1607,18 @@ function renderMd(raw) {
   return `<div class="md">${out.join('')}</div>`;
 }
 
+// "≈$3.40 per commit · 18 of 30 made during a Claude session · ≈$12 in sessions with no commit"
+function commitSummaryLine(s) {
+  if (!s || !s.withSession) return '';
+  const w = costWording();
+  const parts = [
+    `${costChip(s.perCommit, { cls: '' })} per commit`,
+    `${s.withSession} of ${s.total} made during a Claude session`,
+    fmtCost(s.noCommitSpend) ? `${costChip(s.noCommitSpend, { cls: '' })} in sessions with no commit` : '',
+  ].filter(Boolean);
+  return `<div class="set-sub" style="margin:0 0 8px" title="${esc(`Each session's ${w.noun} is split evenly over the commits made while it was active (±5 minutes). Commits outside any session are left out.`)}">${parts.join(' · ')}</div>`;
+}
+
 function dSection(title, inner, empty) {
   return `<details class="d-section" open><summary>${esc(title)}</summary>${
     inner || `<div class="d-empty">${esc(empty)}</div>`}</details>`;
@@ -1697,6 +1709,8 @@ function renderDetail(d, name) {
         ${esc(c.subject)}
       </span>
       ${c.sessionId ? `<button class="copy" data-session="${esc(c.sessionId)}" title="${esc(c.sessionTitle || '')}">session →</button>` : ''}
+      ${c.cost != null ? `<span title="${esc((c.costFrom || []).map((f) =>
+        `${f.title || 'session'}: split over ${f.commits} commit${f.commits === 1 ? '' : 's'}`).join('\n'))}">${costChip(c.cost)}</span>` : ''}
       <span class="s-when">${esc(statCompact(c.stat))}</span>
       <span class="s-when">${relTime(c.ts)}</span>
     </li>`).join('');
@@ -1708,7 +1722,7 @@ function renderDetail(d, name) {
   $('#d-body').innerHTML =
     muteBtn +
     dSection(`Sessions — ${d.sessions.length}`, sessions, 'No sessions recorded.') +
-    dSection(`What changed — last ${(d.commits || []).length} commits`, commitRows ? `<ul class="d-sessions">${commitRows}</ul>` : null, 'No git history here.') +
+    dSection(`What changed — last ${(d.commits || []).length} commits`, commitRows ? commitSummaryLine(d.commitSummary) + `<ul class="d-sessions">${commitRows}</ul>` : null, 'No git history here.') +
     dSection('CLAUDE.md', d.claudeMd.length ? dFiles(d.claudeMd, 'name') : null, 'No CLAUDE.md — sessions here start without project instructions.') +
     dSection(`Memory — ${d.memory.length} file${d.memory.length === 1 ? '' : 's'}`, d.memory.length ? dFiles(d.memory, 'name') : null, 'No memory yet.') +
     dSection(`Skills, agents & commands — ${caps.length}`, caps.length ? dFiles(caps, 'name') : null, 'None in .claude/skills, .claude/agents, or .claude/commands.') +

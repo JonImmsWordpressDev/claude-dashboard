@@ -2216,3 +2216,47 @@ test('jobAttention flags uncommitted files or branch-only commits, nothing other
   assert.equal(jobAttention(job, { exists: true, error: true }), null);
   assert.equal(jobAttention(job, undefined), null);
 });
+
+// --- cost per commit ---
+const { commitCosts } = require('../lib/gitlog');
+
+test('commitCosts splits each session evenly over the commits in its window', () => {
+  const H = 3600000;
+  const commits = [
+    { sha: 'c3', ts: 10 * H },          // inside s2
+    { sha: 'c2', ts: 3 * H },           // inside s1
+    { sha: 'c1', ts: 2 * H },           // inside s1
+    { sha: 'c0', ts: 0.5 * H },         // no session: written by hand
+  ];
+  const sessions = [
+    { sessionId: 's1', title: 'Build it', startedAt: 1.5 * H, lastActivityAt: 3.2 * H, estCost: 6 },
+    { sessionId: 's2', title: 'Fix it', startedAt: 9 * H, lastActivityAt: 10.5 * H, estCost: 3 },
+    { sessionId: 's3', title: 'Explore', startedAt: 5 * H, lastActivityAt: 6 * H, estCost: 2 }, // no commits
+    { sessionId: 's4', title: 'Free', startedAt: 5 * H, lastActivityAt: 6 * H, estCost: 0 },
+  ];
+  const { commits: out, summary } = commitCosts(commits, sessions);
+  assert.equal(out.find((c) => c.sha === 'c1').cost, 3);
+  assert.equal(out.find((c) => c.sha === 'c2').cost, 3);
+  assert.equal(out.find((c) => c.sha === 'c3').cost, 3);
+  assert.equal(out.find((c) => c.sha === 'c0').cost, undefined);
+  assert.deepEqual(out.find((c) => c.sha === 'c1').costFrom, [{ sessionId: 's1', title: 'Build it', commits: 2 }]);
+  assert.deepEqual(summary, { total: 4, withSession: 3, perCommit: 3, noCommitSpend: 2 });
+});
+
+test('commitCosts gives a commit inside two overlapping sessions a share of both', () => {
+  const commits = [{ sha: 'a', ts: 1000000 }];
+  const sessions = [
+    { sessionId: 'x', startedAt: 900000, lastActivityAt: 1100000, estCost: 1 },
+    { sessionId: 'y', startedAt: 950000, lastActivityAt: 1050000, estCost: 2 },
+  ];
+  const { commits: out, summary } = commitCosts(commits, sessions);
+  assert.equal(out[0].cost, 3);
+  assert.equal(out[0].costFrom.length, 2);
+  assert.equal(summary.perCommit, 3);
+});
+
+test('commitCosts with no commits or no sessions reports nothing to split', () => {
+  assert.deepEqual(commitCosts([], [{ sessionId: 's', startedAt: 1, lastActivityAt: 2, estCost: 5 }]).summary,
+    { total: 0, withSession: 0, perCommit: null, noCommitSpend: 0 });
+  assert.deepEqual(commitCosts([{ sha: 'a', ts: 5 }], undefined).summary, { total: 1, withSession: 0, perCommit: null, noCommitSpend: 0 });
+});

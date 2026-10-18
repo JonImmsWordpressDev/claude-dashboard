@@ -40,11 +40,8 @@ ${demoSource}
       case '/api/session': return D.demoSession(q.get('id'), q.get('after'));
       case '/api/session-changes': return D.demoChanges(q.get('id'), q.get('file'));
       case '/api/search': return { q: q.get('q') || '', prompts: [], titles: [], notes: [], transcripts: null };
-      case '/api/project': return {
-        path: '/demo/acme-storefront', sessions: [], commits: [], muted: false,
-        claudeMd: [], memory: [], skills: [], agents: [], commands: [], settings: {},
-        toolset: D.demoToolset(),
-      };
+      case '/api/project': return D.demoProject();
+
       case '/api/config': return {
         demo: true, notifications: true, usageApi: false, weeklyBudget: 200, idleNagMinutes: 60,
         terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false,

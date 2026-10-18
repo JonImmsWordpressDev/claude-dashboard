@@ -15,9 +15,9 @@ const { sessionTitle } = require('./lib/transcripts');
 const { friendlyName } = require('./lib/names');
 const cfg = require('./lib/config');
 const { isProjectMuted } = require('./lib/notify');
-const { recentCommits, linkCommitsToSessions } = require('./lib/gitlog');
+const { recentCommits, linkCommitsToSessions, commitCosts } = require('./lib/gitlog');
 const { sessionChangeList, sessionFileDiff } = require('./lib/changes');
-const { demoState, demoStats, demoSession, demoChanges, demoInventory, demoToolset } = require('./lib/demo');
+const { demoState, demoStats, demoSession, demoChanges, demoInventory, demoProject } = require('./lib/demo');
 const { runSelfUpdate } = require('./lib/update');
 const { readInventory } = require('./lib/inventory');
 const { readToolset } = require('./lib/toolset');
@@ -133,13 +133,7 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/search') return json(res, 200, { q: '', prompts: [], titles: [], notes: [], transcripts: null });
     if (url === '/api/reveal-file') return json(res, 200, { ok: true });
-    if (url === '/api/project') {
-      return json(res, 200, {
-        path: '/demo/acme-storefront', sessions: [], commits: [], muted: false,
-        claudeMd: [], memory: [], skills: [], agents: [], commands: [], settings: {},
-        toolset: demoToolset(),
-      });
-    }
+    if (url === '/api/project') return json(res, 200, demoProject());
     if (url === '/api/config' && req.method === 'GET') {
       return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, idleNagMinutes: 60, terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], themes: cfg.THEMES, version: VERSION, errors: [], pricingSource: null, unpricedModels: [] });
     }
@@ -258,7 +252,9 @@ const server = http.createServer((req, res) => {
     Promise.all([projectDetail(known), recentCommits(known), readInventory(collector.projectPaths())])
       .then(async ([detail, commits, inventory]) => {
         detail.sessions = collector.allSessions(known);
-        detail.commits = linkCommitsToSessions(commits, detail.sessions);
+        const costed = commitCosts(linkCommitsToSessions(commits, detail.sessions), detail.sessions);
+        detail.commits = costed.commits;
+        detail.commitSummary = costed.summary;
         detail.muted = isProjectMuted(known, cfg.readConfig().mutedProjects);
         detail.toolset = await readToolset(known, inventory);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
