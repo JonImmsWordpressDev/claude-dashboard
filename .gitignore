@@ -10,3 +10,6 @@ chats.json
 
 # Claude Code worktrees (feature branches checked out beside the repo)
 .claude/worktrees/
+
+# static demo build output (scripts/build-demo.js)
+site/

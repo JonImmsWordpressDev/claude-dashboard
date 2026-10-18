@@ -24,7 +24,8 @@
   ],
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/pure-logic.test.js"
+    "test": "node --test test/pure-logic.test.js",
+    "demo:build": "node scripts/build-demo.js"
   },
   "engines": {
     "node": ">=18"
