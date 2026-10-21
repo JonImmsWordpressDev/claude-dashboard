@@ -16,6 +16,7 @@ const { friendlyName } = require('./lib/names');
 const cfg = require('./lib/config');
 const { isProjectMuted } = require('./lib/notify');
 const { recentCommits, linkCommitsToSessions, commitCosts } = require('./lib/gitlog');
+const { createRemoteServer } = require('./lib/remote');
 const { sessionChangeList, sessionFileDiff } = require('./lib/changes');
 const { demoState, demoStats, demoSession, demoChanges, demoInventory, demoProject } = require('./lib/demo');
 const { runSelfUpdate } = require('./lib/update');
@@ -292,6 +293,7 @@ const server = http.createServer((req, res) => {
       ignores: cfg.readIgnores(),
       pricingSource: cfg.readPricing().source,
       unpricedModels: collector.unpricedModels(),
+      remote: remote.status(cfg.readConfig()),
     });
     return;
   }
@@ -325,7 +327,7 @@ const server = http.createServer((req, res) => {
             if (!known) return json(res, 404, { ok: false, error: 'unknown project' });
             cfg.setProjectMuted(known, payload.muted !== false);
           } else {
-            cfg.updateConfig(payload);
+            remote.apply(cfg.updateConfig(payload));
           }
         } else if (url === '/api/names') {
           const known = collector
@@ -589,7 +591,19 @@ function openBrowser(url) {
   else execFile('xdg-open', [url], () => {});
 }
 
+// Phone view: opt-in second listener; never in demo mode.
+const remote = createRemoteServer({
+  getState: () => collector.state,
+  readConfig: cfg.readConfig,
+  publicDir: path.join(__dirname, 'public'),
+});
+
 (DEMO ? Promise.resolve() : collector.start()).then(() => {
+  if (!DEMO) {
+    remote.apply(cfg.readConfig());
+    // Wi-Fi and Tailscale addresses change; follow them.
+    setInterval(() => remote.apply(cfg.readConfig()), 60_000).unref();
+  }
   server.listen(PORT, HOST, () => {
     console.log(`claude-dashboard listening on ${DASH_URL}${DEMO ? ' (demo mode)' : ''}`);
     if (OPEN) {

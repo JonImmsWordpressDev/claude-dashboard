@@ -25,6 +25,7 @@ There is no build, lint, or bundling step. Logs for the installed service: `~/Li
 - **No network calls** except three, all user-initiated or toggleable: the Keychain-authed Anthropic OAuth usage fetch (`lib/usage.js`, toggleable, in-memory token only — never written or logged), the GitHub update check in `server.js`, and the self-update in `lib/update.js` (runs `git pull` / `npm install -g` — fixed commands, never client input). Anything else that phones home will be rejected.
 - **The `/api/open` family executes shell commands.** Any change there (or in `lib/opener.js`) must validate inputs against collector-known state — session IDs, project paths — never trust client-supplied paths. The existing pattern: look the request up in `collector.projectPaths()` / `collector.findSession()` and use the server-side value.
 - Server binds `127.0.0.1` only by default; POST endpoints enforce same-origin.
+- **The phone view (`lib/remote.js`) is the only listener off `127.0.0.1`.** It is opt-in, binds a private LAN or Tailscale address only, and serves exactly `mobile.html`, the fonts, and `/m/state` (Bearer pairing key, constant-time compare, lockout after repeated failures). Keep it that way: never route `/api/*`, transcripts, paths or anything that runs a command through it, and keep `mobileState()` free of session ids, cwd and resume commands (a test enforces this).
 
 ## Architecture
 

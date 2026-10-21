@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mission Control">
+<meta name="robots" content="noindex">
+<title>Mission Control</title>
+<style>
+  @font-face { font-family: 'JetBrains Mono'; src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+  @font-face { font-family: 'JetBrains Mono'; src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+  @font-face { font-family: 'Oswald'; src: url('/fonts/Oswald-Variable.woff2') format('woff2'); font-weight: 200 700; font-display: swap; }
+  :root {
+    --bg: #f5f4f0; --surface: #ffffff; --ink: #1d2326; --muted: #596264; --faint: #8a9394;
+    --line: #dedbd2; --accent: #1d7a44; --warn: #a66a00; --warn-bg: rgba(166, 106, 0, 0.10); --bad: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1215; --surface: #151d22; --ink: #e9e4d6; --muted: #93a09e; --faint: #5d6b6b;
+      --line: #202b31; --accent: #46c073; --warn: #ffb020; --warn-bg: rgba(255, 176, 32, 0.12); --bad: #ff5f45;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font: 14px/1.45 'JetBrains Mono', ui-monospace, monospace;
+    padding: max(14px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  .disp { font-family: Oswald, 'Arial Narrow', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; }
+  header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 600; flex: 1; }
+  header h1 .ch { color: var(--warn); }
+  #dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  #dot.on { background: var(--accent); }
+  #dot.err { background: var(--warn); }
+  #clock { font-weight: 700; font-variant-numeric: tabular-nums; }
+  #summary { padding: 16px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); margin-bottom: 14px; }
+  #summary .big { font-size: 34px; font-weight: 600; line-height: 1.1; }
+  #summary.alert { background: var(--warn-bg); border-color: var(--warn); }
+  #summary.alert .big { color: var(--warn); }
+  #summary.clear .big { color: var(--accent); }
+  #summary .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+  .card.waiting { border-color: var(--warn); border-left-width: 4px; }
+  .card .top { display: flex; align-items: center; gap: 8px; }
+  .card .proj { font-size: 18px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st { font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); }
+  .st.waiting { background: var(--warn); color: #0d1215; border-color: var(--warn); }
+  .st.busy { color: var(--accent); }
+  .badge { font-size: 11px; color: var(--accent); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; }
+  .title { color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
+  .reason { margin-top: 8px; color: var(--ink); overflow-wrap: anywhere; }
+  .reason .g { color: var(--warn); margin-right: 6px; }
+  .meta { margin-top: 8px; font-size: 12px; color: var(--faint); display: flex; gap: 12px; flex-wrap: wrap; }
+  .meta .warn { color: var(--warn); }
+  h2 { font-size: 12px; color: var(--muted); margin: 20px 0 8px; font-weight: 400; letter-spacing: 0.12em; }
+  .meter { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .meter .lbl { width: 60px; color: var(--muted); }
+  .meter .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+  .meter .fill { display: block; height: 100%; background: var(--accent); }
+  .meter .fill.hot { background: var(--warn); }
+  .meter .fill.crit { background: var(--bad); }
+  .meter .pct { width: 44px; text-align: right; }
+  .eta { color: var(--warn); font-size: 12px; margin: -4px 0 10px 70px; }
+  #msg { color: var(--muted); padding: 24px 4px; }
+  #foot { color: var(--faint); font-size: 11px; margin-top: 18px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <span id="dot"></span>
+  <h1 class="disp"><span class="ch">❯</span> Mission Control</h1>
+  <span id="clock"></span>
+</header>
+<main id="app"><div id="msg">Connecting…</div></main>
+<div id="foot"></div>
+<script>
+'use strict';
+// Pairing key: from the link's #k=... (never sent to the server as part of
+// the URL), remembered so a home-screen bookmark keeps working.
+const KEY = (() => {
+  const m = location.hash.match(/(?:^#|&)k=([\w-]+)/);
+  if (m) { try { localStorage.setItem('mcKey', m[1]); } catch {} return m[1]; }
+  try { return localStorage.getItem('mcKey'); } catch { return null; }
+})();
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const sameDay = (ms) => new Date(ms).toDateString() === new Date().toDateString();
+const when = (ms) => (sameDay(ms) ? '' : new Date(ms).toLocaleDateString([], { weekday: 'short' }) + ' ') + clock(ms);
+const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
+const since = (ms) => (ms ? mins(Math.max(0, Math.floor((Date.now() - ms) / 60000))) : '');
+let lastOk = 0;
+
+function message(text) {
+  $('#app').innerHTML = `<div id="msg">${esc(text)}</div>`;
+}
+
+function card(s) {
+  const glyph = s.reason ? (s.reason.kind === 'question' ? '?' : s.reason.kind === 'permission' ? '🔒' : '›') : '';
+  return `<div class="card ${s.status === 'waiting' ? 'waiting' : ''}">
+    <div class="top">
+      <span class="proj disp">${esc(s.projectName)}</span>
+      ${s.background ? '<span class="badge">BG</span>' : ''}
+      <span class="st ${esc(s.status)}">${s.status === 'waiting' ? 'NEEDS YOU' : esc(String(s.status || '').toUpperCase())}</span>
+    </div>
+    <div class="title">${esc(s.title)}</div>
+    ${s.reason ? `<div class="reason"><span class="g">${glyph}</span>${esc(s.reason.text)}</div>` : ''}
+    <div class="meta">
+      ${s.waitingMin != null ? `<span class="warn">waiting ${mins(s.waitingMin)}</span>` : s.startedAt ? `<span>${since(s.startedAt)}</span>` : ''}
+      ${s.quietMin != null ? `<span class="warn">quiet ${s.quietMin}m</span>` : ''}
+      ${s.estCost != null ? `<span>≈$${Number(s.estCost).toFixed(2)}</span>` : ''}
+      ${s.contextPct != null ? `<span class="${s.contextPct >= 70 ? 'warn' : ''}">ctx ${s.contextPct}%</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function meter(label, pct, hitAt) {
+  if (pct == null) return '';
+  const cls = pct >= 90 ? 'crit' : pct >= 75 ? 'hot' : '';
+  return `<div class="meter"><span class="lbl">${label}</span><span class="bar"><span class="fill ${cls}" style="width:${Math.min(100, pct)}%"></span></span><span class="pct">${Math.round(pct)}%</span></div>` +
+    (hitAt && pct < 100 ? `<div class="eta">at this pace: 100% around ${esc(when(hitAt))}</div>` : '');
+}
+
+function render(d) {
+  const waiting = d.waiting || 0;
+  const live = d.live || [];
+  document.title = waiting ? `(${waiting}) Mission Control` : 'Mission Control';
+  const summary = waiting
+    ? `<div id="summary" class="alert"><div class="big disp">${waiting} need${waiting === 1 ? 's' : ''} you</div><div class="sub">${live.length} running</div></div>`
+    : live.length
+      ? `<div id="summary" class="clear"><div class="big disp">All clear</div><div class="sub">${live.length} running, none waiting on you</div></div>`
+      : `<div id="summary"><div class="big disp">Quiet</div><div class="sub">No Claude Code sessions running</div></div>`;
+  const l = d.limits;
+  const limits = l && (l.session != null || l.week != null)
+    ? `<h2 class="disp">Limits</h2>${meter('5-hour', l.session, l.sessionHitAt)}${meter('week', l.week, l.weekHitAt)}`
+    : '';
+  $('#app').innerHTML = summary + live.map(card).join('') + limits;
+}
+
+async function poll() {
+  if (!KEY) {
+    message('Open this page from the link in Settings → Phone view on your Mac.');
+    $('#dot').className = 'err';
+    return;
+  }
+  try {
+    const r = await fetch('/m/state', { headers: { Authorization: `Bearer ${KEY}` }, cache: 'no-store' });
+    if (r.status === 401) {
+      message('This link no longer works. Copy a fresh one from Settings → Phone view on your Mac.');
+      $('#dot').className = 'err';
+      return;
+    }
+    if (r.status === 429) {
+      message('Too many tries with a wrong key. Wait ten minutes, then use a fresh link.');
+      $('#dot').className = 'err';
+      return;
+    }
+    if (!r.ok) throw new Error(String(r.status));
+    render(await r.json());
+    lastOk = Date.now();
+    $('#dot').className = 'on';
+  } catch {
+    $('#dot').className = 'err';
+    if (!lastOk) message("Can't reach your Mac. Check that your phone is on the same network, and that the dashboard is running.");
+  }
+  $('#foot').textContent = lastOk ? `updated ${clock(lastOk)} · refreshes every 5 seconds` : '';
+}
+
+function tick() { $('#clock').textContent = clock(Date.now()); }
+tick();
+setInterval(tick, 15000);
+poll();
+setInterval(() => { if (!document.hidden) poll(); }, 5000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+</script>
+</body>
+</html>

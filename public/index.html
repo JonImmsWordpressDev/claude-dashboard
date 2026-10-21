@@ -2423,6 +2423,61 @@ async function saveSetting(endpoint, payload, note) {
   }
 }
 
+// Settings → Phone view: the opt-in listener for your phone (lib/remote.js).
+function phoneViewRows(r) {
+  if (!r) return '';
+  const status = !r.enabled ? 'off'
+    : r.error ? `<span style="color:var(--warn)">${esc(r.error)}</span>`
+    : r.running ? `<span style="color:var(--accent)">on</span>` : 'starting…';
+  return `
+      <div class="set-row">
+        <span class="set-label">Phone view<span class="set-sub">who needs you and your limits, on your phone; read-only, needs the pairing key in the link</span></span>
+        <input type="checkbox" id="set-remote" ${r.enabled ? 'checked' : ''}>
+      </div>
+      ${r.enabled ? `
+      <div class="set-row">
+        <span class="set-label">Reachable from<span class="set-sub">Tailscale works away from home, on your devices only; status: ${status}</span></span>
+        <select id="set-remote-mode">
+          <option value="lan" ${r.mode === 'lan' ? 'selected' : ''}>Home Wi-Fi</option>
+          <option value="tailscale" ${r.mode === 'tailscale' ? 'selected' : ''}>Tailscale</option>
+        </select>
+      </div>
+      ${r.url ? `
+      <div class="set-row">
+        <span class="set-label">Phone link<span class="set-sub">copy it, then paste on your phone (Universal Clipboard) or AirDrop it; new link turns the old one off</span></span>
+        <button class="copy" id="set-remote-copy">copy link</button>
+        <button class="copy" id="set-remote-rotate">new link</button>
+      </div>` : ''}` : ''}`;
+}
+
+function wirePhoneView(r) {
+  const toggle = $('#set-remote');
+  if (!toggle) return;
+  toggle.addEventListener('change', async (e) => {
+    await saveSetting('/api/config', { remoteEnabled: e.target.checked }, e.target.checked ? 'Phone view on' : 'Phone view off');
+    openSettings();
+  });
+  const mode = $('#set-remote-mode');
+  if (mode) mode.addEventListener('change', async (e) => {
+    await saveSetting('/api/config', { remoteMode: e.target.value }, e.target.value === 'tailscale' ? 'Phone view: Tailscale' : 'Phone view: home Wi-Fi');
+    openSettings();
+  });
+  const copy = $('#set-remote-copy');
+  if (copy) copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(r.url);
+      toast('Phone link copied. Paste it in Safari on your phone.');
+    } catch {
+      toast("Clipboard blocked. The link is in config.json's remoteKey.");
+    }
+  });
+  const rotate = $('#set-remote-rotate');
+  if (rotate) rotate.addEventListener('click', async () => {
+    await saveSetting('/api/config', { rotateRemoteKey: true }, 'New phone link made. The old one no longer works.');
+    openSettings();
+  });
+}
+
 async function openSettings() {
   openDrawerShell('Settings', 'changes save instantly');
   try {
@@ -2457,6 +2512,7 @@ async function openSettings() {
         <span class="set-label">Usage meters<span class="set-sub">fetches your own usage from Anthropic's API using your Claude Code sign-in (kept in memory) — the dashboard's only automatic network call</span></span>
         <input type="checkbox" id="set-usage" ${c.usageApi !== false ? 'checked' : ''}>
       </div>
+      ${phoneViewRows(c.remote)}
       <div class="set-row">
         <span class="set-label">Theme<span class="set-sub">Departures board follows light/dark; Newsprint is always-light; the rest are always-dark</span></span>
         <select id="set-theme">
@@ -2555,6 +2611,7 @@ async function openSettings() {
       saveSetting('/api/config', { notifications: e.target.checked }, e.target.checked ? 'Notifications on' : 'Notifications off'));
     $('#set-usage').addEventListener('change', (e) =>
       saveSetting('/api/config', { usageApi: e.target.checked }, e.target.checked ? 'Usage meters on' : 'Usage meters off — header falls back to the statusline cache'));
+    wirePhoneView(c.remote);
     $('#set-chats').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;

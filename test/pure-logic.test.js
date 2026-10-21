@@ -2260,3 +2260,51 @@ test('commitCosts with no commits or no sessions reports nothing to split', () =
     { total: 0, withSession: 0, perCommit: null, noCommitSpend: 0 });
   assert.deepEqual(commitCosts([{ sha: 'a', ts: 5 }], undefined).summary, { total: 1, withSession: 0, perCommit: null, noCommitSpend: 0 });
 });
+
+// --- phone view (lib/remote.js) ---
+const { pickAddress, mobileState, checkKey, newKey } = require('../lib/remote');
+
+test('pickAddress chooses the home network or the Tailscale address, never loopback', () => {
+  const ifaces = {
+    lo0: [{ family: 'IPv4', address: '127.0.0.1', internal: true }],
+    utun4: [{ family: 'IPv4', address: '100.101.102.103', internal: false }],
+    bridge100: [{ family: 'IPv4', address: '192.168.64.1', internal: false }],
+    en0: [{ family: 'IPv6', address: 'fe80::1', internal: false }, { family: 'IPv4', address: '192.168.1.23', internal: false }],
+  };
+  assert.equal(pickAddress(ifaces, 'lan'), '192.168.1.23'); // en0 beats the bridge
+  assert.equal(pickAddress(ifaces, 'tailscale'), '100.101.102.103');
+  assert.equal(pickAddress({ lo0: ifaces.lo0 }, 'lan'), null);
+  assert.equal(pickAddress({ en0: [{ family: 'IPv4', address: '8.8.8.8', internal: false }] }, 'lan'), null); // public IPs never
+  assert.equal(pickAddress({ en0: ifaces.en0 }, 'tailscale'), null);
+});
+
+test('checkKey needs the exact Bearer key', () => {
+  const k = newKey();
+  assert.equal(k.length, 32);
+  assert.equal(checkKey(`Bearer ${k}`, k), true);
+  assert.equal(checkKey(`Bearer ${k}x`, k), false);
+  assert.equal(checkKey(k, k), false);
+  assert.equal(checkKey(undefined, k), false);
+  assert.equal(checkKey('Bearer ', ''), false);
+});
+
+test('mobileState carries only what the phone shows: no paths, ids or transcripts', () => {
+  const out = mobileState({
+    generatedAt: 5,
+    liveSessions: [
+      { sessionId: 'secret-id', cwd: '/Users/me/private', projectPath: '/Users/me/private', projectName: 'Acme', title: 'Checkout',
+        status: 'waiting', waitingReason: { kind: 'permission', text: 'Bash rm -rf build' }, waitingMin: 70, quietMin: null,
+        startedAt: 1, estCost: 2.5, context: { pct: 41 }, background: { jobId: 'j' }, resumeCommand: 'cd /Users/me/private && claude --resume x' },
+      { projectName: 'Blog', title: 'Migrate', status: 'busy', waitingReason: null, context: null, background: null },
+    ],
+    quota: { utilization: 64, weeklyUtilization: 52, stale: false },
+    forecast: { session: { hitAt: 99 }, week: null },
+  });
+  assert.equal(out.waiting, 1);
+  assert.deepEqual(out.limits, { session: 64, week: 52, sessionHitAt: 99, weekHitAt: null });
+  assert.equal(out.live[0].reason.text, 'Bash rm -rf build');
+  assert.equal(out.live[0].background, true);
+  const text = JSON.stringify(out);
+  for (const leak of ['secret-id', '/Users/me', 'resume']) assert.equal(text.includes(leak), false, leak);
+  assert.equal(mobileState({ quota: { utilization: 5, stale: true } }).limits, null);
+});

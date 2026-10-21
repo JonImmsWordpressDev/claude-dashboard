@@ -35,6 +35,10 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
 
+**New in 1.15.0**
+
+- Phone view: see who needs you and your limits on your phone, over home Wi-Fi or Tailscale. Opt-in, read-only, locked to a pairing key in the link.
+
 **New in 1.14.0**
 
 - Cost per commit in each project's slide-over: every commit made during a Claude session shows its share of that session's cost, with a summary of cost per commit and spend in sessions that committed nothing.
@@ -227,6 +231,16 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 A SwiftBar plugin lives in `menubar/claude-dash.15s.sh`. The menu bar shows `❯ N` while sessions run, `❯ N⚠` in amber when one is waiting on you, and `❯ N?` when a busy session has gone quiet, and `❯ N⚠⏳` when one of them has waited past the idle reminder. The dropdown lists live sessions, repos with unpushed work, the 7-day estimate, and an "Open dashboard" link.
 
 Setup: `brew install --cask swiftbar`, then point SwiftBar's plugin folder at this repo's `menubar/` directory. The plugin refreshes every 15 seconds (rename the file to change the interval).
+
+## Phone view
+
+See who needs you from your phone. Settings → **Phone view** turns on a second, read-only listener on your home Wi-Fi or on Tailscale. It shows each running session, what it's waiting on, and your limit meters with the forecast.
+
+1. Turn on **Phone view** in settings. If macOS asks whether node may accept incoming connections, click Allow.
+2. Pick **Home Wi-Fi**, or **Tailscale** to reach it away from home (Tailscale on both devices, your devices only).
+3. Click **copy link**, then paste it into Safari on your phone (Universal Clipboard) or AirDrop it. Add it to your home screen if you like.
+
+The link carries a pairing key after `#`, which browsers never send to a server; the page sends it as a header instead. Without the key the listener answers nothing, and 20 wrong keys from one address lock that address out for ten minutes. **new link** replaces the key, so every old link stops working. The phone listener serves only that page and its feed: no transcripts, no file paths, nothing that runs a command. It stays off until you turn it on, never runs in demo mode, and follows your Mac's address when the network changes. The port is 4518 (`CLAUDE_DASH_REMOTE_PORT` changes it).
 
 ## Settings
 
