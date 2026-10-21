@@ -35,6 +35,10 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
 
+**New in 1.16.0**
+
+- The dashboard fits a phone screen: departures rows stack, slide-overs go full width, and nothing scrolls sideways. The live demo now shows phone visitors the real phone layout.
+
 **New in 1.15.0**
 
 - Phone view: see who needs you and your limits on your phone, over home Wi-Fi or Tailscale. Opt-in, read-only, locked to a pairing key in the link.

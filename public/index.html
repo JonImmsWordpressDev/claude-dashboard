@@ -835,6 +835,36 @@
     opacity: 0; transition: opacity 0.18s; pointer-events: none;
   }
   #toast.show { opacity: 1; }
+
+  /* ---------- phones: everything in one column, nothing scrolls sideways ---------- */
+  @media (max-width: 700px) {
+    header { padding: 10px 16px; gap: 8px 10px; }
+    header h1 { font-size: 16px; }
+    #search { flex: 1 1 90px; width: auto; min-width: 0; margin-left: 0; }
+    header .spacer, #open-pref-wrap { display: none; } /* opening terminals is a desk thing; still in settings */
+    #quota { order: 10; flex: 1 1 100%; flex-wrap: wrap; gap: 8px 14px; }
+    .meter .bar { width: 52px; }
+    #live { padding: 12px 16px; }
+    main { padding: 14px 16px; }
+    .dep-row { grid-template-columns: 44px 1fr; padding: 8px 12px; }
+    .dep-proj { font-size: 17px; }
+    .dep-mid, .dep-right { grid-column: 1 / -1; }
+    .dep-right { justify-self: stretch; flex-wrap: wrap; gap: 6px 10px; }
+    .dep-title, .dep-reason { white-space: normal; overflow-wrap: anywhere; }
+    #pinned .pin-row { flex-wrap: wrap; padding: 7px 12px; }
+    #git-attn .ga-item { white-space: normal; }
+    #drawer { width: 100vw; border-left: none; }
+    #drawer .d-head { flex-wrap: wrap; padding: 12px 16px 10px; }
+    #drawer .d-head h2 { font-size: 15px; flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+    #drawer .d-head .d-path { display: none; }
+    #drawer .d-actions { flex-wrap: wrap; order: 3; flex: 1 1 100%; }
+    #drawer .d-actions:empty { display: none; }
+    #drawer .d-body { padding: 6px 16px 40px; }
+    #drawer pre, #mc pre { max-width: 100%; overflow-x: auto; }
+    #drawer code { overflow-wrap: anywhere; }
+    #mc-grid { grid-template-columns: 1fr; padding: 12px 16px; }
+    .heat { max-width: 100%; }
+  }
 </style>
 </head>
 <body>

@@ -77,7 +77,8 @@ ${demoSource}
 })();
 </script>`;
 
-const banner = `<div id="demo-banner" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:999;
+const banner = `<style>@media (max-width: 700px) { #demo-banner { left: 16px !important; right: 16px; transform: none !important; font-size: 12px !important; } }</style>
+<div id="demo-banner" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:999;
   max-width:calc(100% - 32px);box-sizing:border-box;padding:10px 16px;border-radius:8px;
   background:var(--surface);color:var(--ink);border:1px solid var(--warn);box-shadow:0 6px 24px rgba(0,0,0,.35);
   font:13px 'JetBrains Mono',ui-monospace,monospace;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
@@ -91,8 +92,6 @@ let html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
 const swaps = [
   [/url\('\/fonts\//g, "url('fonts/"],
   [/<link rel="manifest"[^>]*>\n?/, ''],
-  // The UI is desktop-first; on a phone, show the whole board zoomed out.
-  [/<meta name="viewport"[^>]*>/, '<meta name="viewport" content="width=1280">'],
   [/<title>[^<]*<\/title>/, '<title>Claude Mission Control — live demo</title>\n<meta name="description" content="A clickable demo of Claude Mission Control, a local, read-only dashboard for every Claude Code session.">'],
 ];
 for (const [re, to] of swaps) {
