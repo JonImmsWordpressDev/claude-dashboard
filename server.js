@@ -16,9 +16,11 @@ const { friendlyName } = require('./lib/names');
 const cfg = require('./lib/config');
 const { isProjectMuted } = require('./lib/notify');
 const { recentCommits, linkCommitsToSessions, commitCosts } = require('./lib/gitlog');
+const { hallOfFame } = require('./lib/fame');
 const { createRemoteServer } = require('./lib/remote');
 const { sessionChangeList, sessionFileDiff } = require('./lib/changes');
-const { demoState, demoStats, demoSession, demoChanges, demoInventory, demoProject } = require('./lib/demo');
+const { demoState, demoStats, demoSession, demoChanges, demoInventory, demoProject, demoFame } = require('./lib/demo');
+const fameCache = new Map(); // days -> { at, data }; git log per project is too slow to run per click
 const { runSelfUpdate } = require('./lib/update');
 const { readInventory } = require('./lib/inventory');
 const { readToolset } = require('./lib/toolset');
@@ -123,6 +125,7 @@ const server = http.createServer((req, res) => {
     if (url === '/api/state') return json(res, 200, demoState());
     if (url === '/api/health') return json(res, 200, { ok: true, demo: true, version: VERSION });
     if (url === '/api/stats') return json(res, 200, demoStats());
+    if (url === '/api/fame') return json(res, 200, demoFame());
     if (url === '/api/inventory') return json(res, 200, demoInventory());
     if (url === '/api/session') {
       const q = new URL(req.url, 'http://localhost').searchParams;
@@ -270,6 +273,24 @@ const server = http.createServer((req, res) => {
 
   if (url === '/api/stats') {
     json(res, 200, collector.statsSummary());
+    return;
+  }
+
+  if (url === '/api/fame') {
+    const raw = Number(new URL(req.url, 'http://localhost').searchParams.get('days'));
+    const days = [7, 30, 0].includes(raw) ? raw : 30;
+    const hit = fameCache.get(days);
+    if (hit && Date.now() - hit.at < 60000) return json(res, 200, hit.data);
+    const sessions = collector.fameSessions();
+    const cut = days ? Date.now() - days * 86400000 : 0;
+    const paths = [...new Set(sessions.filter((s) => s.lastActivityAt >= cut).map((s) => s.projectPath))];
+    Promise.all(paths.map((p) => recentCommits(p, 1000).then((c) => [p, c])))
+      .then((pairs) => {
+        const data = hallOfFame(sessions, Object.fromEntries(pairs), { days });
+        fameCache.set(days, { at: Date.now(), data });
+        json(res, 200, data);
+      })
+      .catch((e) => json(res, 500, { error: String(e.message).slice(0, 200) }));
     return;
   }
 

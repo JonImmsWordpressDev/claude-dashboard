@@ -41,6 +41,7 @@ ${demoSource}
       case '/api/session-changes': return D.demoChanges(q.get('id'), q.get('file'));
       case '/api/search': return { q: q.get('q') || '', prompts: [], titles: [], notes: [], transcripts: null };
       case '/api/project': return D.demoProject();
+      case '/api/fame': return D.demoFame();
 
       case '/api/config': return {
         demo: true, notifications: true, usageApi: false, weeklyBudget: 200, idleNagMinutes: 60,

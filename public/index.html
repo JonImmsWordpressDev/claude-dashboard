@@ -716,6 +716,26 @@
   .hv-foot .v { font-size: 13px; margin-top: 2px; }
   .hv-foot .v.bad { color: var(--bad); }
   .hv-note { color: var(--faint); font-size: 11px; padding: 0 20px 24px; }
+  .fm-sum { color: var(--muted); font-size: 12px; margin: 4px 0 14px; }
+  .fm-award { margin: 0 0 18px; padding: 12px 14px; background: var(--surface); border-radius: 2px; }
+  .fm-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .fm-title { font-family: var(--disp-font); font-size: 18px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .fm-blurb { color: var(--faint); font-size: 11.5px; flex: 1; min-width: 0; }
+  .fm-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); min-width: 0; }
+  .fm-head + .fm-row { border-top: none; margin-top: 6px; }
+  .fm-row .flap { font-family: var(--disp-font); font-weight: 600; font-size: 14px; flex: none; }
+  .fm-row.first .flap { color: var(--warn); font-size: 18px; }
+  .fm-row .hv-avatar { width: 32px; height: 32px; }
+  .fm-row.first .hv-avatar { width: 44px; height: 44px; }
+  .fm-who { flex: 1; min-width: 0; }
+  .fm-who .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; font-size: 13px; }
+  .fm-row.first .fm-who .t { font-weight: 700; }
+  .fm-who .t:hover { color: var(--warn); }
+  .fm-who .p { color: var(--faint); font-size: 11px; }
+  .fm-val { flex: none; font-size: 12.5px; text-align: right; }
+  .fm-row.first .fm-val { color: var(--warn); font-weight: 700; }
+  .fm-share img { width: 100%; border-radius: 6px; border: 1px solid var(--line); margin-top: 10px; }
+  .fm-period button.on { color: var(--warn); border-color: var(--warn); }
   @keyframes hvblink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
   .hv-avatar .eyes { transform-box: fill-box; transform-origin: center; animation: hvblink 4.5s infinite; }
   @media (prefers-reduced-motion: reduce) { .hv-avatar .eyes { animation: none; } }
@@ -947,6 +967,9 @@
     #mc-grid { grid-template-columns: 1fr; padding: 12px 16px; }
     .hv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 16px 0; }
     .hv-tile:last-child:nth-child(odd) { grid-column: span 2; }
+    .fm-award { padding: 10px 12px; }
+    .fm-head .fm-title { flex: 1; }
+    .fm-blurb { flex: 1 1 100%; order: 3; }
     .hv-grid { grid-template-columns: 1fr; padding: 12px 16px 16px; }
     .hv-note { padding: 0 16px 24px; }
     .hv-money .big { font-size: 32px; }
@@ -1012,6 +1035,7 @@
     <span class="mc-title">Hive</span>
     <span class="mc-sub" id="hive-sub"></span>
     <span class="spacer"></span>
+    <button class="copy" data-fame title="Your best sessions by award">Hall of Fame →</button>
     <button class="d-close" id="hive-close" title="Close (Esc)">✕</button>
   </div>
   <div class="hv-tiles" id="hive-tiles"></div>
@@ -3408,6 +3432,7 @@ async function openWeekReport() {
 // Always drawn in the dark departures palette so shared cards look alike.
 const CARD = { w: 1200, h: 630, bg: '#0d1215', flap: '#151d22', flapHi: '#1c262c', split: 'rgba(0,0,0,0.45)', ink: '#e9e4d6', muted: '#93a09e', faint: '#5d6b6b', line: '#202b31', green: '#46c073', amber: '#ffb020' };
 let shareCanvas = null;
+let shareName = 'card.png';
 
 async function renderShareCard() {
   const { w, days } = weekReport;
@@ -3485,15 +3510,139 @@ async function renderShareCard() {
   text('npx claude-mission-control', CARD.w - 64, 578, mono(16), CARD.muted, 'right');
 
   shareCanvas = c;
+  shareName = `week-with-claude-${new Date().toISOString().slice(0, 10)}.png`;
   return c.toDataURL('image/png');
 }
+
+// ---------- hall of fame ----------
+const fame = { days: 30, data: null };
+const FAME_PERIODS = [[7, 'week'], [30, '30 days'], [0, 'all time']];
+const famePeriod = (d) => (d === 7 ? 'the last 7 days' : d === 30 ? 'the last 30 days' : 'all time');
+
+async function openFame(days = fame.days) {
+  fame.days = days;
+  closeHive();
+  openDrawerShell('Hall of Fame', 'your best sessions, by award');
+  $('#d-actions').innerHTML = `<span class="fm-period">${FAME_PERIODS.map(([d, l]) =>
+    `<button class="copy${d === days ? ' on' : ''}" data-fame-days="${d}">${l}</button>`).join(' ')}</span>`;
+  try {
+    const r = await fetch(`/api/fame?days=${days}`);
+    if (!r.ok) throw new Error();
+    fame.data = await r.json();
+  } catch {
+    $('#d-body').innerHTML = '<div class="d-empty">Could not load the Hall of Fame.</div>';
+    return;
+  }
+  if (fame.days !== days || $('#d-title').textContent !== 'Hall of Fame') return;
+  const f = fame.data;
+  if (!f.awards.length) {
+    $('#d-body').innerHTML = `<div class="d-empty">No sessions in ${famePeriod(days)} yet.</div>`;
+    return;
+  }
+  $('#d-body').innerHTML = `<div class="fm-sum">${f.sessions} session${f.sessions === 1 ? '' : 's'} · ${f.commits} commit${f.commits === 1 ? '' : 's'} in ${famePeriod(days)}. Commits count toward the session working in that repo when they were made.</div>` +
+    f.awards.map((a) => `<div class="fm-award" data-award="${esc(a.key)}">
+      <div class="fm-head"><span class="fm-title">${esc(a.title)}</span><span class="fm-blurb">${esc(a.blurb)}</span>
+        <button class="copy" data-fame-share="${esc(a.key)}" title="Make a share card for this award">share card</button></div>
+      ${a.entries.map((e, i) => `<div class="fm-row${i === 0 ? ' first' : ''}">
+        <span class="flap">#${i + 1}</span>${hvAvatar(e.sessionId, '')}
+        <div class="fm-who"><div class="t" data-session="${esc(e.sessionId)}" title="${esc(e.title)}">${esc(e.title)}</div>
+          <div class="p">${esc(e.projectName)}${e.model ? ` · ${esc(modelShort(e.model))}` : ''} · ${esc(relTime(e.lastActivityAt))}</div></div>
+        <span class="fm-val">${esc(e.label)}</span></div>`).join('')}
+      <div class="fm-share"></div>
+    </div>`).join('');
+}
+
+// Titles are often a raw first prompt; keep home paths off a shareable image.
+function cardSafe(s) {
+  return String(s || '').replace(/\/(Users|home)\/[^/\s]+/g, '~').replace(/[A-Z]:\\Users\\[^\\\s]+/gi, '~');
+}
+
+function avatarImage(id) {
+  const svg = hvAvatar(id, '')
+    .replace('class="hv-avatar" ', 'xmlns="http://www.w3.org/2000/svg" width="240" height="240" ')
+    .replaceAll('var(--bg)', CARD.bg).replaceAll('var(--ink)', CARD.ink).replaceAll('var(--warn)', CARD.amber);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  });
+}
+
+async function renderFameCard(award) {
+  await Promise.all(['700 140px Oswald', '500 20px "JetBrains Mono"'].map((f) => document.fonts.load(f).catch(() => {})));
+  const c = document.createElement('canvas');
+  c.width = CARD.w * 2;
+  c.height = CARD.h * 2;
+  const g = c.getContext('2d');
+  g.scale(2, 2);
+  const oswald = (px, wt = 600) => `${wt} ${px}px Oswald, "Arial Narrow", sans-serif`;
+  const mono = (px, wt = 500) => `${wt} ${px}px "JetBrains Mono", ui-monospace, monospace`;
+  const text = (str, x, y, font, color, align = 'left', spacing = 0) => {
+    g.font = font; g.fillStyle = color; g.textAlign = align;
+    if ('letterSpacing' in g) g.letterSpacing = `${spacing}px`;
+    g.fillText(str, x, y);
+    if ('letterSpacing' in g) g.letterSpacing = '0px';
+  };
+  const fit = (str, max, font) => {
+    g.font = font;
+    let t = str;
+    while (t.length > 1 && g.measureText(t).width > max) t = t.slice(0, -2) + '…';
+    return t;
+  };
+  const win = award.entries[0];
+
+  g.fillStyle = CARD.bg; g.fillRect(0, 0, CARD.w, CARD.h);
+  text('❯ HALL OF FAME', 64, 92, oswald(30), CARD.amber, 'left', 2);
+  text(famePeriod(fame.days).toUpperCase(), CARD.w - 64, 90, mono(18), CARD.muted, 'right', 2);
+  g.fillStyle = CARD.line; g.fillRect(64, 116, CARD.w - 128, 2);
+
+  text(award.title.toUpperCase(), 58, 222, oswald(84, 700), CARD.ink, 'left', 1);
+  text(award.blurb, 64, 266, mono(20), CARD.muted);
+
+  const av = await avatarImage(win.sessionId);
+  g.fillStyle = CARD.flap; g.beginPath(); g.roundRect(64, 300, CARD.w - 128, 170, 8); g.fill();
+  if (av) g.drawImage(av, 88, 318, 134, 134);
+  text(fit(cardSafe(win.title), CARD.w - 128 - 200 - 260, mono(26, 700)), 246, 362, mono(26, 700), CARD.ink);
+  text(fit(`${win.projectName}${win.model ? ' · ' + modelShort(win.model) : ''}`, 560, mono(18)), 246, 398, mono(18), CARD.muted);
+  text(win.label, CARD.w - 92, 400, oswald(50, 600), CARD.amber, 'right');
+  text('#1', CARD.w - 92, 346, oswald(26, 600), CARD.muted, 'right');
+
+  award.entries.slice(1).forEach((e, i) => {
+    const y = 516 + i * 34;
+    text(`#${i + 2}`, 64, y, oswald(22, 600), CARD.faint);
+    text(fit(`${cardSafe(e.title)} · ${e.projectName}`, 760, mono(17)), 110, y, mono(17), CARD.muted);
+    text(e.label, CARD.w - 64, y, mono(17), CARD.muted, 'right');
+  });
+
+  text('npx claude-mission-control', CARD.w - 64, 606, mono(16), CARD.muted, 'right');
+  shareCanvas = c;
+  shareName = `hall-of-fame-${award.key}.png`;
+  return c.toDataURL('image/png');
+}
+
+document.addEventListener('click', async (e) => {
+  if (e.target.closest('[data-fame]')) { openFame(); return; }
+  const p = e.target.closest('[data-fame-days]');
+  if (p) { openFame(Number(p.dataset.fameDays)); return; }
+  const sb = e.target.closest('[data-fame-share]');
+  if (!sb || !fame.data) return;
+  const award = fame.data.awards.find((a) => a.key === sb.dataset.fameShare);
+  if (!award) return;
+  for (const el of document.querySelectorAll('.fm-share')) el.innerHTML = '';
+  const box = sb.closest('.fm-award').querySelector('.fm-share');
+  box.innerHTML = '<div class="d-empty">Drawing…</div>';
+  const url = await renderFameCard(award);
+  box.innerHTML = `<img alt="${esc(award.title)} share card" src="${url}">
+    <div style="margin-top:10px;display:flex;gap:8px"><button class="copy" data-card-download>download PNG ⇩</button><button class="copy" data-card-copy>copy image</button></div>`;
+});
 
 document.addEventListener('click', async (e) => {
   if (!shareCanvas) return;
   if (e.target.closest('[data-card-download]')) {
     const a = document.createElement('a');
     a.href = shareCanvas.toDataURL('image/png');
-    a.download = `week-with-claude-${new Date().toISOString().slice(0, 10)}.png`;
+    a.download = shareName;
     a.click();
     toast('Card downloaded');
   } else if (e.target.closest('[data-card-copy]')) {
@@ -3560,6 +3709,7 @@ function paletteItems(q) {
   items.push({ k: '⚙', label: 'Settings', hint: 'rename, hide, terminal, notifications', run: openSettings });
   items.push({ k: '▦', label: 'Mission Control', hint: 'every live session at once', run: openMissionControl });
   items.push({ k: '⬢', label: 'Hive', hint: 'live sessions as characters · who is winning', run: openHive });
+  items.push({ k: '★', label: 'Hall of Fame', hint: 'your best sessions by award · share cards', run: () => openFame() });
   items.push({ k: '▲', label: 'Stats', hint: 'heatmap · models · hours', run: openStats });
   items.push({ k: '⌗', label: 'Plugins & MCP', hint: 'what is installed, enabled, needs auth', run: openInventory });
   items.push({ k: '☰', label: 'Your week with Claude', hint: '7-day report · export', run: openWeekReport });

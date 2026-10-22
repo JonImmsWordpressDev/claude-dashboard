@@ -35,6 +35,12 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
 
+**New in 1.18.0**
+
+- Hall of Fame (⌘K → Hall of Fame, or from Hive): your best sessions over a week, 30 days or all time, across seven awards from most commits shipped and best value per commit to the grinder and the delegator. Each award makes a share card.
+
+![Hall of Fame: podiums for most commits shipped, best value per commit and the grinder, each entry with its robot avatar, project, model and score, and a share card drawn for the most commits award](docs/screenshots/hall-of-fame.png)
+
 **New in 1.17.1**
 
 - Burn rate is now your pace over the last 30 minutes. It used to divide lifetime cost by process age, which read in the thousands per hour right after resuming an old session.

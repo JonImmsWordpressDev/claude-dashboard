@@ -2369,3 +2369,42 @@ test('the demo roster matches what hiveRoster would assign', () => {
   const r = hiveRoster(live);
   for (const s of live) assert.deepEqual(s.hive, r[s.sessionId], s.title);
 });
+
+// ---------- hall of fame ----------
+const { hallOfFame, commitsBySession } = require('../lib/fame');
+
+test('commitsBySession gives a commit to the most recently started session around it', () => {
+  const H = 3600000;
+  const sessions = [
+    { sessionId: 'long', projectPath: '/p', startedAt: 0.5 * H, lastActivityAt: 10 * H },     // resumed, spans everything
+    { sessionId: 'short', projectPath: '/p', startedAt: 4 * H, lastActivityAt: 5 * H },
+    { sessionId: 'other', projectPath: '/q', startedAt: 4 * H, lastActivityAt: 5 * H },
+  ];
+  const commits = { '/p': [{ ts: 1 * H }, { ts: 4.5 * H }, { ts: 5 * H + 4 * 60000 }, { ts: 20 * H }] };
+  const m = commitsBySession(sessions, commits);
+  assert.equal(m.get('long'), 1);
+  assert.equal(m.get('short'), 2);   // includes the one inside the 5 minute pad
+  assert.equal(m.get('other'), undefined);
+});
+
+test('hallOfFame ranks awards, respects the period and minimums, and skips empty awards', () => {
+  const D = 86400000;
+  const now = 100 * D;
+  const base = { projectPath: '/p', projectName: 'P', model: 'm', subagents: 0, files: 0, errors: 0 };
+  const sessions = [
+    { ...base, sessionId: 'a', title: 'A', cost: 10, tools: 200, startedAt: now - 2 * D, lastActivityAt: now - 2 * D + 3600000 },
+    { ...base, sessionId: 'b', title: 'B', cost: 2, tools: 60, errors: 6, startedAt: now - 5 * D, lastActivityAt: now - 5 * D + 3600000 },
+    { ...base, sessionId: 'old', title: 'Old', cost: 500, tools: 9000, startedAt: now - 60 * D, lastActivityAt: now - 60 * D },
+  ];
+  const commits = { '/p': [1, 2, 3, 4].map((i) => ({ ts: now - 2 * D + i * 60000 })).concat([{ ts: now - 5 * D + 60000 }]) };
+  const r = hallOfFame(sessions, commits, { days: 30, now });
+  assert.equal(r.sessions, 2);
+  assert.equal(r.commits, 5);
+  const award = (k) => r.awards.find((a) => a.key === k);
+  assert.deepEqual(award('shipped').entries.map((e) => [e.sessionId, e.label]), [['a', '4 commits'], ['b', '1 commit']]);
+  assert.deepEqual(award('value').entries.map((e) => e.label), ['$2.50 per commit']);  // b has under 3 commits
+  assert.deepEqual(award('clean').entries.map((e) => e.sessionId), ['a', 'b']);
+  assert.equal(award('spender').entries[0].label, '$10.00');
+  assert.equal(award('delegator'), undefined);
+  assert.equal(hallOfFame(sessions, commits, { days: 0, now }).awards.find((a) => a.key === 'spender').entries[0].label, '$500');
+});
