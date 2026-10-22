@@ -1520,19 +1520,36 @@ test('managedSettingsPath is per platform and never under the home dir', () => {
 });
 
 // --- burn rate, cache hit ratio, top-N ---
-const { burnRate, cacheHitRatio, topByCost } = require('../lib/pricing');
+const { burnRate, recordCostSample, cacheHitRatio, topByCost } = require('../lib/pricing');
 
-test('burnRate is null until five minutes in, then whole dollars per hour (null under $1/h)', () => {
-  const t0 = 1_700_000_000_000;
-  assert.equal(burnRate(1, t0, t0 + 4 * 60000 + 59000), null);
-  assert.equal(burnRate(1, t0, t0 + 5 * 60000), 12);         // $1 in 5 min = $12/h
-  assert.equal(burnRate(1, t0, t0 + 30 * 60000), 2);         // $1 in 30 min
-  assert.equal(burnRate(0.123, t0, t0 + 60 * 60000), null);  // under $1/h
-  assert.equal(burnRate(1.6, t0, t0 + 60 * 60000), 2);      // whole dollars
-  assert.equal(burnRate(null, t0, t0 + 3600000), null);
-  assert.equal(burnRate(0, t0, t0 + 3600000), null);
-  assert.equal(burnRate(1, null, t0), null);
-  assert.equal(burnRate(1, undefined, t0), null);
+test('burnRate is the pace over recent samples, not lifetime cost over process age', () => {
+  const t0 = Date.UTC(2026, 9, 22, 12);
+  const M = 60000;
+  const at = (pairs) => pairs.map(([m, usd]) => [t0 + m * M, usd]);
+  assert.equal(burnRate(at([[0, 100], [4, 101]]), t0 + 4 * M), null);       // under five minutes of samples
+  assert.equal(burnRate(at([[0, 100], [5, 101]]), t0 + 5 * M), 12);         // $1 in 5 min, history ignored
+  assert.equal(burnRate(at([[0, 144], [10, 144]]), t0 + 10 * M), null);     // resumed $144 session, idle
+  assert.equal(burnRate(at([[0, 1], [60, 1.4]]), t0 + 60 * M), null);       // under $1/h
+  assert.equal(burnRate(at([[0, 0], [30, 0.8]]), t0 + 30 * M), 2);          // whole dollars
+  assert.equal(burnRate(at([[0, 1], [10, 2]]), t0 + 50 * M), null);         // no samples for a while
+  assert.equal(burnRate([], t0), null);
+  assert.equal(burnRate(null, t0), null);
+});
+
+test('recordCostSample keeps a 30-minute window and restarts when cost drops', () => {
+  const t0 = Date.UTC(2026, 9, 22, 12);
+  const M = 60000;
+  const s = [];
+  recordCostSample(s, 10, t0);
+  recordCostSample(s, 10, t0 + 10000);                 // same cost within 30s: skipped
+  assert.equal(s.length, 1);
+  for (let m = 1; m <= 40; m++) recordCostSample(s, 10 + m * 0.1, t0 + m * M);
+  assert.ok(s[1][0] > t0 + 40 * M - 30 * M);           // only the window survives
+  assert.equal(burnRate(s, t0 + 40 * M), 6);           // $0.10 a minute
+  recordCostSample(s, 2, t0 + 41 * M);                 // transcript rewritten
+  assert.deepEqual(s, [[t0 + 41 * M, 2]]);
+  recordCostSample(s, null, t0 + 42 * M);
+  assert.equal(s.length, 1);
 });
 
 test('cacheHitRatio is cache reads over all input-side tokens, null when there are none', () => {

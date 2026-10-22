@@ -35,6 +35,10 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
 
+**New in 1.17.1**
+
+- Burn rate is now your pace over the last 30 minutes. It used to divide lifetime cost by process age, which read in the thousands per hour right after resuming an old session.
+
 **New in 1.17.0**
 
 - Hive view (⬢ in the header): every live session as a character card. Each gets a generated face, a personality earned from what it has done ("the delegator", "the big spender", "the new kid"), a rank by spend, and its latest tool call on a live ticker.
@@ -226,7 +230,7 @@ If something looks off, the log is at `~/Library/Logs/claude-dashboard.log`. To 
 - Worktree sessions (`.claude/worktrees/…`) are folded into their parent project and badged `⎇`.
 - **Notifications** — the moment any session flips to "waiting for input", you get a macOS notification (with sound) naming the project and what it needs — the question, the command awaiting permission, or Claude's last line. Fires once per wait, never on server restart. Mute a single noisy project from its slide-over (the bell button at the top), or disable everything with `CLAUDE_DASH_NOTIFY=0` in the plist. Notifications arrive via Script Editor/osascript — if you don't see them, allow it under System Settings → Notifications.
 - **Cost estimates** — every session, project, and live row carries a `≈$` figure computed from the token counts in its transcript. On an API-key login it is labelled *estimated cost*; on a subscription it is *list-price value*, a relative weight rather than a bill (hover a cost chip for the wording). Rates are Anthropic list prices bundled with the dashboard (cached 2026-10-06). If your organization deploys Claude Code's `modelPricing` managed setting, the dashboard reads it and reports at your contracted rates; you can also put the same `modelPricing` block in `config.json` (⚙ settings → *copy skeleton*). A model the table doesn't know is priced at the Opus tier and marked with an amber `?` so a stale table is never silent. Subagent tokens are included.
-- **Live cost** — running sessions show their cost so far on the departures board and in Mission Control, with a `$/h` burn rate once the session is five minutes old.
+- **Live cost** — running sessions show their cost so far on the departures board and in Mission Control, with a `$/h` burn rate: the pace over the last 30 minutes, shown after five minutes of watching. A resumed session's earlier history doesn't count toward it.
 - **Session cost breakdown** — the `≈$ ▾` button in a transcript's header opens a table by model (input, output, cache read, cache write), the subagent share, and the session's cache hit rate.
 - **Context and tools** — each live session shows how full its context window was on the last turn (`412k / 1M`, amber from 70%, red from 90%), so you can see a compaction or a fresh session coming. Mission Control panes add the session's tool-call count with failures in amber, and the transcript's cost panel shows the same count in its footer. Read from the same incremental transcript scan as everything else; subagents are not included.
 - **Most expensive sessions** — in the stats view: the ten costliest sessions all time, click to open.

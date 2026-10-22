@@ -1312,7 +1312,7 @@ function liveCard(s) {
     <div class="dep-right">
       ${modelChip(s.model)}
       ${s.estCost != null ? `<span class="dep-cost">${costChip(s.estCost, { cls: 'dep-cost-main', assumed: s.assumed })}${
-        s.burnRate ? `<span class="dep-burn" title="Estimated spend per hour at the current pace">$${s.burnRate}/h</span>` : ''}</span>` : ''}
+        s.burnRate ? `<span class="dep-burn" title="Spend per hour over the last 30 minutes">$${s.burnRate}/h</span>` : ''}</span>` : ''}
       ${contextMeter(s.context)}
       ${s.waitingMin != null
         ? `<span class="dep-elapsed overdue" title="No reply for ${s.waitingMin} minutes — session started ${elapsed(s.startedAt)} ago">${waitLabel(s.waitingMin)}</span>`
