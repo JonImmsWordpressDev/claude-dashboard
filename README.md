@@ -35,6 +35,12 @@ Claude Code runs in a terminal. Once you have two or three sessions going, you l
 
 *Every screenshot here is demo data (`CLAUDE_DASH_DEMO=1`). The projects are invented.*
 
+**New in 1.17.0**
+
+- Hive view (⬢ in the header): every live session as a character card. Each gets a generated face, a personality earned from what it has done ("the delegator", "the big spender", "the new kid"), a rank by spend, and its latest tool call on a live ticker.
+
+![Hive view: three live sessions as character cards with robot avatars, personalities, rank by spend with the gap to the leader, each session's last tool call, context and share-of-spend bars, and a strip of live totals with the 5-hour limit forecast](docs/screenshots/hive.png)
+
 **New in 1.16.0**
 
 - The dashboard fits a phone screen: departures rows stack, slide-overs go full width, and nothing scrolls sideways. The live demo now shows phone visitors the real phone layout.

@@ -638,6 +638,88 @@
   .mc-pane-body { flex: 1; overflow-y: auto; padding: 6px 12px 10px; font-size: 12px; }
   .mc-pane-body .t-turn { margin-top: 8px; }
 
+  /* ---------- hive: one character card per live session ---------- */
+  #hive {
+    position: fixed; inset: 0; z-index: 15;
+    background: var(--bg); overflow-y: auto;
+  }
+  #hive[hidden] { display: none !important; }
+  #hive .mc-head { position: sticky; top: 0; z-index: 1; }
+  .hv-tiles {
+    display: grid; gap: 10px; padding: 14px 20px 0;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+  .hv-tile { background: var(--surface); border-radius: 2px; padding: 9px 12px; min-width: 0; }
+  .hv-tile .k { color: var(--faint); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .hv-tile .v { font-family: var(--disp-font); font-size: 26px; font-weight: 500; line-height: 1.15; }
+  .hv-tile .s { color: var(--faint); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hv-tile.warn .v, .hv-tile .eta { color: var(--warn); }
+  .hv-grid {
+    display: grid; gap: 12px; padding: 12px 20px 20px;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    align-items: start;
+  }
+  .hv-empty { color: var(--faint); font-size: 13px; padding: 24px 20px; }
+  .hv-card {
+    background: var(--surface); border-radius: 2px; min-width: 0;
+    border-top: 3px solid var(--hue); display: flex; flex-direction: column;
+  }
+  .hv-card.waiting { border-top-color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn-bg); }
+  .hv-top { display: flex; gap: 12px; align-items: flex-start; padding: 14px 14px 6px; }
+  .hv-avatar { flex: none; width: 64px; height: 64px; }
+  .hv-who { flex: 1; min-width: 0; }
+  .hv-name {
+    font-weight: 700; font-size: 14px; line-height: 1.3; cursor: pointer;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .hv-name:hover { color: var(--warn); }
+  .hv-persona { color: var(--muted); font-style: italic; font-size: 12px; margin-top: 2px; cursor: help; }
+  .hv-proj { color: var(--faint); font-size: 11px; margin-top: 3px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .hv-rank { flex: none; text-align: right; }
+  .hv-rank .n { font-family: var(--disp-font); font-size: 30px; font-weight: 600; line-height: 1; padding: 2px 8px; }
+  .hv-rank .gap { color: var(--faint); font-size: 10.5px; margin-top: 5px; white-space: nowrap; }
+  .hv-rank .gap.lead { color: var(--accent); }
+  .hv-money { display: flex; align-items: baseline; gap: 10px; padding: 4px 14px 10px; flex-wrap: wrap; }
+  .hv-money .big { font-family: var(--disp-font); font-size: 38px; font-weight: 500; line-height: 1; }
+  .hv-money .rate { color: var(--muted); font-size: 12px; }
+  .hv-state {
+    margin: 0 14px; padding: 7px 10px; border-radius: 2px; background: var(--surface2);
+    display: flex; gap: 10px; align-items: center; min-width: 0; font-size: 12px;
+  }
+  .hv-state .txt { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hv-card.waiting .hv-state { background: var(--warn-bg); }
+  .hv-card.waiting .hv-state .txt { color: var(--ink); }
+  .hv-sec { padding: 12px 14px 0; }
+  .hv-label { color: var(--faint); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; }
+  .hv-call { margin-top: 5px; font-size: 13px; display: flex; gap: 6px; min-width: 0; }
+  .hv-call .verb { color: var(--muted); flex: none; }
+  .hv-call .tgt { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .hv-call.fresh .tgt { color: var(--accent); }
+  .hv-trail { margin-top: 4px; font-size: 11.5px; }
+  .hv-trail div { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hv-trail div:nth-child(2) { opacity: 0.75; }
+  .hv-trail div:nth-child(3) { opacity: 0.5; }
+  .hv-task { margin-top: 6px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hv-task .prompt-ch { color: var(--accent); margin-right: 6px; }
+  .hv-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px 14px 0; }
+  .hv-bar .row { display: flex; justify-content: space-between; color: var(--faint); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .hv-bar .row b { color: var(--muted); font-weight: 500; letter-spacing: 0; }
+  .hv-bar .track { height: 4px; background: var(--surface2); margin-top: 5px; border-radius: 2px; overflow: hidden; }
+  .hv-bar .fill { display: block; height: 100%; background: var(--hue); }
+  .hv-bar.warn .fill { background: var(--warn); }
+  .hv-bar.bad .fill { background: var(--bad); }
+  .hv-foot {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    padding: 12px 14px 12px; margin-top: 12px; border-top: 1px solid var(--line);
+  }
+  .hv-foot .k { color: var(--faint); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .hv-foot .v { font-size: 13px; margin-top: 2px; }
+  .hv-foot .v.bad { color: var(--bad); }
+  .hv-note { color: var(--faint); font-size: 11px; padding: 0 20px 24px; }
+  @keyframes hvblink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
+  .hv-avatar .eyes { transform-box: fill-box; transform-origin: center; animation: hvblink 4.5s infinite; }
+  @media (prefers-reduced-motion: reduce) { .hv-avatar .eyes { animation: none; } }
+
   .mc-agents .agents { max-height: 160px; overflow-y: auto; }
   .agents { padding: 4px 12px 6px; border-bottom: 1px solid var(--line); font-size: 11.5px; flex: none; }
   .agents .team { color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10.5px; margin-bottom: 2px; }
@@ -863,6 +945,11 @@
     #drawer pre, #mc pre { max-width: 100%; overflow-x: auto; }
     #drawer code { overflow-wrap: anywhere; }
     #mc-grid { grid-template-columns: 1fr; padding: 12px 16px; }
+    .hv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 16px 0; }
+    .hv-tile:last-child:nth-child(odd) { grid-column: span 2; }
+    .hv-grid { grid-template-columns: 1fr; padding: 12px 16px 16px; }
+    .hv-note { padding: 0 16px 24px; }
+    .hv-money .big { font-size: 32px; }
     .heat { max-width: 100%; }
   }
 </style>
@@ -881,6 +968,7 @@
   <div id="quota"></div>
   <span id="clock" class="flap" title="board time"></span>
   <button id="mc-btn" title="Mission Control — every live session at once">▦</button>
+  <button id="hive-btn" title="Hive: every live session as a character card">⬢</button>
   <button id="bell-btn" title="Catch-up — what happened while you were away">🔔<span id="bell-badge" hidden></span></button>
   <button id="gear" title="Settings">⚙</button>
 </header>
@@ -918,6 +1006,17 @@
     <button class="d-close" id="mc-close" title="Close (Esc)">✕</button>
   </div>
   <div id="mc-grid"></div>
+</div>
+<div id="hive" hidden>
+  <div class="mc-head">
+    <span class="mc-title">Hive</span>
+    <span class="mc-sub" id="hive-sub"></span>
+    <span class="spacer"></span>
+    <button class="d-close" id="hive-close" title="Close (Esc)">✕</button>
+  </div>
+  <div class="hv-tiles" id="hive-tiles"></div>
+  <div id="hive-grid" class="hv-grid"></div>
+  <div class="hv-note">Personalities come from what each session has actually done; hover one to see why. Ranks go by list-price spend.</div>
 </div>
 <div id="drawer-backdrop" hidden></div>
 <aside id="drawer" hidden>
@@ -1441,6 +1540,7 @@ function render(state) {
   renderPinned(state);
   if (typeof renderBell === 'function') renderBell(state);
   if (typeof mcSync === 'function') mcSync();
+  if (typeof hiveSync === 'function') hiveSync();
   renderDigest(state);
 
   // grid + dormant
@@ -2136,6 +2236,7 @@ const mc = { open: false, panes: new Map(), timer: null, polling: false };
 
 function openMissionControl() {
   if (mc.open) return;
+  closeHive();
   mc.open = true;
   $('#mc').hidden = false;
   mcSync();
@@ -2277,6 +2378,230 @@ $('#mc-grid').addEventListener('toggle', (e) => {
   const d = e.target.closest('details[data-agents-key]');
   if (d) localStorage.setItem(`agentsOpen:${d.dataset.agentsKey}`, d.open ? '1' : '0');
 }, true);
+
+// ---------- hive ----------
+// One character card per live session: a generated face, a personality the
+// server earned from real behaviour, rank by spend, and the latest tool call.
+const hive = { open: false, timer: null, trail: new Map(), ranks: new Map(), hues: new Map() };
+
+function hvHash(str) {
+  let h = 2166136261;
+  for (const c of String(str)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+  // Finalizer: ids that share a long prefix still land far apart.
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+
+// Twelve hues spaced so neighbours on the board read as different colours.
+const HV_HUES = [4, 28, 46, 88, 140, 168, 192, 214, 236, 262, 292, 330];
+function hvHue(id) {
+  return hive.hues.get(id) ?? HV_HUES[hvHash(id) % HV_HUES.length];
+}
+
+// Each session keeps its own hue unless an earlier-started live session
+// already wears it; then it takes the next free one.
+function hvAssignHues(live) {
+  hive.hues = new Map();
+  const used = new Set();
+  for (const s of live.slice().sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0))) {
+    let i = hvHash(s.sessionId) % HV_HUES.length;
+    for (let k = 0; k < HV_HUES.length && used.has(i); k++) i = (i + 1) % HV_HUES.length;
+    used.add(i);
+    hive.hues.set(s.sessionId, HV_HUES[i]);
+  }
+}
+
+// A small robot face, the same one every time for the same session.
+function hvAvatar(id, status) {
+  const h = hvHash(id);
+  const col = `hsl(${hvHue(id)} 52% 58%)`;
+  const eye = status === 'waiting' ? 'var(--warn)' : 'var(--ink)';
+  const ant = [
+    `<line x1="28" y1="12" x2="28" y2="5" stroke="${col}" stroke-width="2"/><circle cx="28" cy="4.5" r="3" fill="${col}"/>`,
+    `<line x1="21" y1="12" x2="16" y2="5" stroke="${col}" stroke-width="2"/><line x1="35" y1="12" x2="40" y2="5" stroke="${col}" stroke-width="2"/><circle cx="16" cy="4.5" r="2.2" fill="${col}"/><circle cx="40" cy="4.5" r="2.2" fill="${col}"/>`,
+    `<rect x="3" y="25" width="5" height="10" rx="1.5" fill="${col}"/><rect x="48" y="25" width="5" height="10" rx="1.5" fill="${col}"/>`,
+  ][(h >>> 9) % 3];
+  const eyes = [
+    `<circle cx="22" cy="27" r="3.2"/><circle cx="34" cy="27" r="3.2"/>`,
+    `<rect x="19.5" y="24.5" width="5" height="5"/><rect x="31.5" y="24.5" width="5" height="5"/>`,
+    `<rect x="17" y="25" width="22" height="4" rx="2"/>`,
+    `<circle cx="28" cy="27" r="4.6"/>`,
+  ][(h >>> 11) % 4];
+  const mouth = [
+    `<line x1="22" y1="36" x2="34" y2="36" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`,
+    `<path d="M22 34.5 Q28 39.5 34 34.5" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`,
+    `<rect x="21" y="34.5" width="3.5" height="3" fill="${col}"/><rect x="26.25" y="34.5" width="3.5" height="3" fill="${col}"/><rect x="31.5" y="34.5" width="3.5" height="3" fill="${col}"/>`,
+    `<circle cx="28" cy="36" r="2.2" fill="${col}"/>`,
+  ][(h >>> 13) % 4];
+  const rx = (h >>> 15) % 2 ? 11 : 4;
+  return `<svg class="hv-avatar" viewBox="0 0 56 56" aria-hidden="true">${ant}
+    <rect x="8" y="12" width="40" height="38" rx="${rx}" fill="${col}"/>
+    <rect x="13" y="18" width="30" height="24" rx="3" fill="var(--bg)"/>
+    <g class="eyes" fill="${eye}">${eyes}</g>${mouth}</svg>`;
+}
+
+function hvAgo(at) {
+  if (!at) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - at) / 1000));
+  if (sec < 5) return 'just now';
+  if (sec < 60) return `${sec}s ago`;
+  return relTime(at);
+}
+
+function hvBar(label, value, pct, level = '') {
+  const w = Math.max(0, Math.min(100, Number(pct) || 0));
+  return `<div class="hv-bar ${level}"><div class="row"><span>${label}</span><b>${value}</b></div>
+    <div class="track"><span class="fill" style="width:${w}%"></span></div></div>`;
+}
+
+function hvTiles(live) {
+  const spend = live.reduce((n, s) => n + (s.estCost || 0), 0);
+  const burn = live.reduce((n, s) => n + (s.burnRate || 0), 0);
+  const waiting = live.filter((s) => s.status === 'waiting');
+  const longest = Math.max(0, ...waiting.map((s) => s.waitingMin || 0));
+  const tile = (k, v, sub, cls = '') => `<div class="hv-tile ${cls}"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+  const out = [
+    tile('Live', live.length, `${live.length - waiting.length} working · ${waiting.length} need you`),
+    tile('Spend', fmtCost(spend) || '$0', esc(costWording().noun)),
+    tile('Burn', `$${Math.round(burn)}/h`, 'live sessions combined'),
+    tile('Needs you', waiting.length, waiting.length ? (longest ? esc(waitLabel(longest)) : 'just asked') : 'nobody is waiting', waiting.length ? 'warn' : ''),
+  ];
+  const q = lastState.quota;
+  if (q && !q.stale && q.utilization != null) {
+    const f = lastState.forecast && lastState.forecast.session;
+    const sub = f && f.hitAt ? `<span class="eta">→ ${esc(fmtWhen(f.hitAt))}</span> at this pace` : 'on pace to last the window';
+    out.push(tile('5-hour limit', `${Math.round(q.utilization)}%`, sub, q.utilization >= 80 ? 'warn' : ''));
+  }
+  return out.join('');
+}
+
+function hvCard(s, total) {
+  const r = s.hive || {};
+  const prevRank = hive.ranks.get(s.sessionId);
+  hive.ranks.set(s.sessionId, r.rank);
+  const flip = prevRank != null && prevRank !== r.rank ? ' flip' : '';
+  const gap = r.rank === 1
+    ? (total.count > 1 ? '<div class="gap lead">leading</div>' : '')
+    : r.behind != null ? `<div class="gap">$${r.behind.toFixed(2)} behind</div>` : '';
+  const w = costWording();
+  const rl = s.status === 'waiting' ? reasonLine(s.waitingReason) : null;
+  const stateTxt = rl ? `${rl.glyph ? rl.glyph + ' ' : ''}${rl.short}`
+    : s.status === 'waiting' ? 'waiting for you'
+    : s.quietMin ? `no output for ${s.quietMin}m`
+    : s.background && s.background.detail ? `↳ ${s.background.detail}`
+    : `${elapsed(s.startedAt)} on the clock`;
+  const a = s.lastAction;
+  const fresh = a && a.at && Date.now() - a.at < 10000 ? ' fresh' : '';
+  const call = a
+    ? `<div class="hv-call${fresh}"><span class="verb">${esc(a.verb)}</span><span class="tgt" title="${esc(a.target)}">${esc(a.target)}</span></div>`
+    : '<div class="hv-call"><span class="verb">no tool calls yet</span></div>';
+  const trail = (hive.trail.get(s.sessionId) || []).slice(0, -1).reverse().slice(0, 3)
+    .map((t) => `<div>${esc(t.verb)} ${esc(t.target)}</div>`).join('');
+  const ts = s.tasksSummary;
+  const task = s.currentTask
+    ? `<div class="hv-task"><span class="prompt-ch">❯</span>${esc(s.currentTask.activeForm)}${ts ? ` · ${ts.completed}/${ts.completed + ts.inProgress + ts.pending}` : ''}</div>`
+    : '';
+  const ctx = s.context;
+  const share = total.spend > 0 ? Math.round(((s.estCost || 0) / total.spend) * 100) : 0;
+  const started = s.startedAt ? new Date(s.startedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+  return `<div class="hv-card${s.status === 'waiting' ? ' waiting' : ''}" style="--hue:hsl(${hvHue(s.sessionId)} 52% 58%)">
+    <div class="hv-top">
+      ${hvAvatar(s.sessionId, s.status)}
+      <div class="hv-who">
+        <div class="hv-name" data-session="${esc(s.sessionId)}" title="Open the full transcript">${esc(s.title || s.projectName)}</div>
+        ${r.label ? `<div class="hv-persona" title="${esc(r.why || '')}">${esc(r.label)}</div>` : ''}
+        <div class="hv-proj">${esc(s.projectName)}${modelChip(s.model)}${s.background ? `<span class="badge" title="${esc(BG_TIP)}">bg</span>` : ''}</div>
+      </div>
+      <div class="hv-rank"><span class="flap n${flip}">#${r.rank || '·'}</span>${gap}</div>
+    </div>
+    <div class="hv-money"><span class="big" title="${esc(`${w.noun}: ${w.tip}`)}">${fmtCost(s.estCost) || '$0.00'}</span>${s.burnRate ? `<span class="rate">$${s.burnRate}/h</span>` : ''}</div>
+    <div class="hv-state">${statusFlap(s, 'hv:')}<span class="txt" title="${esc(rl ? rl.full : stateTxt)}">${esc(stateTxt)}</span></div>
+    <div class="hv-sec">
+      <div class="hv-label"><span>Last call</span><span class="hv-ago" data-at="${a && a.at ? a.at : ''}">${hvAgo(a && a.at)}</span></div>
+      ${call}${trail ? `<div class="hv-trail">${trail}</div>` : ''}${task}
+    </div>
+    <div class="hv-bars">
+      ${hvBar('Context', ctx ? `${ctx.pct}%` : 'n/a', ctx ? ctx.pct : 0, ctx && ctx.pct >= 90 ? 'bad' : ctx && ctx.pct >= 70 ? 'warn' : '')}
+      ${hvBar('Share of spend', `${share}%`, share)}
+    </div>
+    <div class="hv-foot">
+      <div><div class="k">Tools</div><div class="v">${s.tools ? s.tools.total : 0}</div></div>
+      <div><div class="k">Failed</div><div class="v${s.tools && s.tools.errors ? ' bad' : ''}">${s.tools ? s.tools.errors : 0}</div></div>
+      <div><div class="k">Agents</div><div class="v">${s.subagents ? s.subagents.count : 0}</div></div>
+      <div><div class="k">Started</div><div class="v">${esc(started)}</div></div>
+    </div>
+  </div>`;
+}
+
+// Remember the last few distinct actions seen while the page is open, so a
+// card shows a short trail rather than only the latest call.
+function hvRecordTrail(live) {
+  const ids = new Set();
+  for (const s of live) {
+    ids.add(s.sessionId);
+    const a = s.lastAction;
+    if (!a) continue;
+    const list = hive.trail.get(s.sessionId) || [];
+    const last = list[list.length - 1];
+    if (last && last.verb === a.verb && last.target === a.target) last.at = a.at;
+    else {
+      list.push({ verb: a.verb, target: a.target, at: a.at });
+      if (list.length > 4) list.shift();
+      hive.trail.set(s.sessionId, list);
+    }
+  }
+  for (const id of hive.trail.keys()) if (!ids.has(id)) hive.trail.delete(id);
+}
+
+function hiveSync() {
+  if (!lastState) return;
+  const live = lastState.liveSessions || [];
+  hvRecordTrail(live);
+  if (!hive.open) return;
+  hvAssignHues(live);
+  $('#hive-sub').textContent = live.length ? `${live.length} session${live.length === 1 ? '' : 's'} live` : '';
+  patch($('#hive-tiles'), hvTiles(live));
+  if (!live.length) {
+    patch($('#hive-grid'), '<div class="hv-empty">No sessions running. Start one with <code class="mono">claude</code> in any project.</div>');
+    return;
+  }
+  const sorted = live.slice().sort((a, b) => ((a.hive && a.hive.rank) || 99) - ((b.hive && b.hive.rank) || 99));
+  const total = { count: live.length, spend: live.reduce((n, s) => n + (s.estCost || 0), 0) };
+  patch($('#hive-grid'), sorted.map((s) => hvCard(s, total)).join(''));
+}
+
+function hvTick() {
+  for (const el of document.querySelectorAll('#hive .hv-ago[data-at]')) {
+    const at = Number(el.dataset.at);
+    if (!at) continue;
+    el.textContent = hvAgo(at);
+    const call = el.closest('.hv-sec').querySelector('.hv-call');
+    if (call) call.classList.toggle('fresh', Date.now() - at < 10000);
+  }
+}
+
+function openHive() {
+  if (hive.open) return;
+  closeMissionControl();
+  hive.open = true;
+  $('#hive').hidden = false;
+  if (location.hash !== '#hive') history.replaceState(null, '', '#hive');
+  hiveSync();
+  hive.timer = setInterval(hvTick, 1000);
+}
+
+function closeHive() {
+  if (!hive.open) return;
+  hive.open = false;
+  $('#hive').hidden = true;
+  clearInterval(hive.timer);
+  hive.timer = null;
+  if (location.hash === '#hive') history.replaceState(null, '', location.pathname + location.search);
+}
+
+$('#hive-btn').addEventListener('click', openHive);
+$('#hive-close').addEventListener('click', closeHive);
+if (location.hash === '#hive') openHive();
 
 // ---------- search ----------
 async function runSearch(q, deep) {
@@ -2787,6 +3112,7 @@ document.addEventListener('keydown', (e) => {
     closeDetail();
     if (typeof closePalette === 'function') closePalette();
     if (!drawerOpen && typeof closeMissionControl === 'function') closeMissionControl();
+    if (!drawerOpen && typeof closeHive === 'function') closeHive();
   }
 });
 
@@ -3233,6 +3559,7 @@ function paletteItems(q) {
   const st = lastState || { projects: [], liveSessions: [] };
   items.push({ k: '⚙', label: 'Settings', hint: 'rename, hide, terminal, notifications', run: openSettings });
   items.push({ k: '▦', label: 'Mission Control', hint: 'every live session at once', run: openMissionControl });
+  items.push({ k: '⬢', label: 'Hive', hint: 'live sessions as characters · who is winning', run: openHive });
   items.push({ k: '▲', label: 'Stats', hint: 'heatmap · models · hours', run: openStats });
   items.push({ k: '⌗', label: 'Plugins & MCP', hint: 'what is installed, enabled, needs auth', run: openInventory });
   items.push({ k: '☰', label: 'Your week with Claude', hint: '7-day report · export', run: openWeekReport });

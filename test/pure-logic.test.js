@@ -2308,3 +2308,47 @@ test('mobileState carries only what the phone shows: no paths, ids or transcript
   for (const leak of ['secret-id', '/Users/me', 'resume']) assert.equal(text.includes(leak), false, leak);
   assert.equal(mobileState({ quota: { utilization: 5, stale: true } }).limits, null);
 });
+
+// ---------- hive view ----------
+const { actionOf, hiveRoster } = require('../lib/hive');
+
+test('actionOf turns a tool call into a short verb and target, file names only', () => {
+  assert.deepEqual(actionOf('Edit', { file_path: '/Users/me/secret/server.js' }), { verb: 'editing', target: 'server.js' });
+  assert.deepEqual(actionOf('Bash', { command: 'npm test', description: 'Run the suite' }), { verb: 'running', target: 'Run the suite' });
+  assert.deepEqual(actionOf('Bash', { command: 'npm   test' }), { verb: 'running', target: 'npm test' });
+  assert.deepEqual(actionOf('WebFetch', { url: 'https://www.example.com/a?b' }), { verb: 'reading', target: 'example.com' });
+  assert.deepEqual(actionOf('mcp__plugin_playwright_playwright__browser_click', {}), { verb: 'using', target: 'playwright playwright' });
+  assert.deepEqual(actionOf('TodoWrite', null), { verb: 'updating the plan', target: '' });
+  assert.equal(actionOf('Bash', { command: 'x'.repeat(200) }).target.length, 48);
+});
+
+test('scanLine keeps the latest tool call as lastTool with its timestamp', () => {
+  const scan = freshScan();
+  scanLine(toolUseLine({ id: 'm1', usage: U, blocks: [{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/a/b/c.md' } }] }), scan);
+  scanLine(toolUseLine({ id: 'm1', usage: U, blocks: [{ type: 'tool_use', id: 't2', name: 'Edit', input: { file_path: '/a/b/d.js' } }] }), scan);
+  assert.equal(scan.lastTool.verb, 'editing');
+  assert.equal(scan.lastTool.target, 'd.js');
+  assert.equal(scan.lastTool.tool, 'Edit');
+});
+
+test('hiveRoster ranks by spend, gives the gap, and hands out distinct personalities', () => {
+  const now = 10 * 3600000;
+  const r = hiveRoster([
+    { sessionId: 'a', estCost: 5, burnRate: 4, tools: { total: 300, errors: 0 }, startedAt: 0 },
+    { sessionId: 'b', estCost: 40, burnRate: 20, tools: { total: 400, errors: 0 }, startedAt: 0 },
+    { sessionId: 'c', estCost: 12.5, burnRate: 30, tools: { total: 10, errors: 0 }, startedAt: now - 60000 },
+  ], now);
+  assert.deepEqual([r.b.rank, r.c.rank, r.a.rank], [1, 2, 3]);
+  assert.equal(r.b.behind, null);
+  assert.equal(r.c.behind, 27.5);
+  assert.equal(r.b.label, 'the big spender');
+  assert.equal(r.c.label, 'the new kid'); // big spender is taken by a higher spender
+  assert.equal(r.a.label, 'the grinder');
+  assert.equal(hiveRoster([{ sessionId: 'z', estCost: null }], now).z.label, 'the steady one');
+});
+
+test('the demo roster matches what hiveRoster would assign', () => {
+  const live = require('../lib/demo').demoState().liveSessions;
+  const r = hiveRoster(live);
+  for (const s of live) assert.deepEqual(s.hive, r[s.sessionId], s.title);
+});
