@@ -9,7 +9,7 @@ Opens Claude Mission Control, a local, read-only dashboard for every Claude Code
 
 ## What it runs, sends, and fetches
 
-- `scripts/ensure-running.sh` checks `http://127.0.0.1:4517/api/health`. If nothing answers, it starts your global `claude-dashboard` install. Without one, it runs `npx claude-mission-control`, which downloads the package from the npm registry once. It then opens the dashboard URL with `open` (macOS) or `xdg-open` (Linux).
+- `scripts/ensure-running.sh` checks `http://127.0.0.1:4517/api/health`. If nothing answers, it starts your global `claude-dashboard` install. Without one, it downloads nothing: it prints the pinned command (`npx claude-mission-control@1.18.0`) for you to run yourself. Once the dashboard is up, it opens the dashboard URL with `open` (macOS) or `xdg-open` (Linux).
 - `scripts/statusline-check.sh` finds your `claude-dashboard` install and reads its `package.json` version. It makes no network calls.
 - The plugin has no hooks, no MCP servers, and no background processes.
 

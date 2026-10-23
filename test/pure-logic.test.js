@@ -2408,3 +2408,17 @@ test('hallOfFame ranks awards, respects the period and minimums, and skips empty
   assert.equal(award('delegator'), undefined);
   assert.equal(hallOfFame(sessions, commits, { days: 0, now }).awards.find((a) => a.key === 'spender').entries[0].label, '$500');
 });
+
+test('plugin version and pinned install commands match package.json', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const { version } = require('../package.json');
+  assert.equal(require('../plugin/.claude-plugin/plugin.json').version, version);
+  for (const f of ['plugin/scripts/ensure-running.sh', 'plugin/skills/statusline/SKILL.md', 'plugin/README.md']) {
+    const text = fs.readFileSync(path.join(root, f), 'utf8');
+    const pins = text.match(/claude-mission-control@[\w.]+/g) || [];
+    assert.ok(pins.length, `${f} pins a version`);
+    for (const p of pins) assert.equal(p, `claude-mission-control@${version}`, f);
+  }
+});
