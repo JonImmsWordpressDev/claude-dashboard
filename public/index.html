@@ -950,6 +950,34 @@
   #palette-list li.sel .pl { color: var(--accent); }
   #palette-empty { color: var(--faint); font-size: 12px; padding: 12px 16px; }
 
+  /* ---------- first-run guide ---------- */
+  #guide {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px 14px; margin-bottom: 22px;
+  }
+  #guide .g-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  #guide .g-head h2 { font-size: 14px; font-weight: 600; }
+  #guide .g-head .g-sub { color: var(--faint); font-size: 12.5px; }
+  #guide .g-head .spacer { flex: 1; }
+  #guide .g-done {
+    font: 500 12.5px var(--ui-font); color: var(--amber-ink); background: var(--accent);
+    border: none; border-radius: 6px; padding: 5px 12px; cursor: pointer;
+  }
+  #guide .g-done:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  #guide .g-grid { display: grid; gap: 12px 24px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  #guide .g-item { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  #guide .g-item b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 4px; }
+  #guide .g-lamps { gap: 6px; }
+  #guide .g-lamps li { align-items: flex-start; }
+  #guide .g-lamps .flap { flex: none; min-width: 84px; justify-content: center; }
+  #guide kbd {
+    font-size: 11.5px; color: var(--ink); background: var(--surface2);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px;
+  }
+  #guide .g-icons { list-style: none; padding: 0; margin: 0; display: grid; gap: 3px; }
+  #guide .g-icons li { display: flex; align-items: center; gap: 8px; }
+  #guide .g-icons svg { flex: none; color: var(--ink); }
+
   /* welcome card for fresh installs */
   #welcome {
     grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--line);
@@ -976,7 +1004,7 @@
     header .spacer, #open-pref-wrap { display: none; } /* opening terminals is a desk thing; still in settings */
     #quota { order: 10; flex: 1 1 100%; flex-wrap: wrap; gap: 8px 14px; }
     .meter .bar { width: 52px; }
-    #live { padding: 12px 16px; }
+    #live { padding: 12px 16px; position: static; } /* a sticky rail would cover most of a phone screen */
     main { padding: 14px 16px; }
     .dep-row { grid-template-columns: 1fr; padding: 10px 12px; }
     .dep-proj { font-size: 15px; }
@@ -1031,6 +1059,7 @@
 
 <section id="live"></section>
 <main>
+  <section id="guide" hidden aria-label="How to read this board"></section>
   <div id="pinned" hidden></div>
   <div id="git-attn" hidden></div>
   <details id="digest" open>
@@ -1623,7 +1652,7 @@ function render(state) {
     : `<div id="welcome">
         <h2><span class="tilde">❯</span> Welcome to Claude Mission Control</h2>
         <p>No Claude Code projects found yet. Run <code>claude</code> in any folder and it appears here automatically — live status, transcripts, git state, costs, the lot.</p>
-        <p>Tip: press <code>⌘K</code> to jump anywhere, <code>/</code> to search, and click ⚙ for settings.</p>
+        <p>Tip: press <code>⌘K</code> to jump anywhere, <code>/</code> to search, and <code>?</code> for a quick guide.</p>
       </div>`);
   const d = $('#dormant');
   d.hidden = dormant.length === 0;
@@ -3761,6 +3790,7 @@ function paletteItems(q) {
   const items = [];
   const st = lastState || { projects: [], liveSessions: [] };
   items.push({ k: '⚙', label: 'Settings', hint: 'rename, hide, terminal, notifications', run: openSettings });
+  items.push({ k: '?', label: 'Show the guide', hint: 'what the lamps, rows and buttons do', run: () => { showGuide(true, true); window.scrollTo({ top: 0 }); } });
   items.push({ k: '▦', label: 'Mission Control', hint: 'every live session at once', run: openMissionControl });
   items.push({ k: '⬢', label: 'Hive', hint: 'live sessions as characters · who is winning', run: openHive });
   items.push({ k: '★', label: 'Hall of Fame', hint: 'your best sessions by award · share cards', run: () => openFame() });
@@ -3863,6 +3893,58 @@ document.addEventListener('keydown', (e) => {
     $('#palette').hidden ? openPalette() : closePalette();
   }
 });
+
+// ---------- first-run guide: shown until dismissed, back with ? or the palette ----------
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+function guideSeen() { try { return localStorage.getItem('guideSeen') === '1'; } catch { return true; } }
+function renderGuide() {
+  const icon = (id) => $(`#${id} svg`)?.outerHTML || '';
+  const mod = isMac ? '⌘' : 'Ctrl';
+  return `<div class="g-head">
+      <h2>How to read this board</h2>
+      <span class="g-sub">Press <kbd>?</kbd> to bring this back.</span>
+      <span class="spacer"></span>
+      <button class="g-done" id="guide-done">Got it</button>
+    </div>
+    <div class="g-grid">
+      <div class="g-item"><b>Status lamps</b>
+        <ul class="g-icons g-lamps">
+          <li><span class="flap st st-waiting">needs you</span> Claude is waiting on you. What it's asking shows under the title.</li>
+          <li><span class="flap st st-busy">busy</span> Claude is working.</li>
+        </ul></div>
+      <div class="g-item"><b>Sessions</b>
+        Click a session title to read its transcript, live if it's running. Hover a row to rename it, open it in your terminal, or copy its resume command.</div>
+      <div class="g-item"><b>Find anything</b>
+        <kbd>${mod}</kbd> <kbd>K</kbd> jumps to any project, session or view. <kbd>/</kbd> searches inside every transcript. Click a project name for its details.</div>
+      <div class="g-item"><b>Top-right buttons</b>
+        <ul class="g-icons">
+          <li>${icon('mc-btn')} Mission Control: every live session side by side</li>
+          <li>${icon('hive-btn')} Hive: live sessions ranked, plus Hall of Fame</li>
+          <li>${icon('bell-btn')} Catch up on what happened while you were away</li>
+          <li>${icon('gear')} Settings, themes and your phone view</li>
+        </ul></div>
+    </div>`;
+}
+function showGuide(show, focus = false) {
+  const g = $('#guide');
+  if (show) {
+    g.innerHTML = renderGuide();
+    g.hidden = false;
+    if (focus) $('#guide-done').focus({ preventScroll: true });
+  } else g.hidden = true;
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#guide-done')) return;
+  try { localStorage.setItem('guideSeen', '1'); } catch {}
+  showGuide(false);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== '?' || e.metaKey || e.ctrlKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+  e.preventDefault();
+  showGuide($('#guide').hidden, true);
+  if (!$('#guide').hidden) window.scrollTo({ top: 0 });
+});
+if (!guideSeen()) showGuide(true);
 
 poll();
 connect();
