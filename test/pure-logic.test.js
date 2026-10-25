@@ -2446,3 +2446,40 @@ test('sessionKind leaves real sessions alone, whatever app started them', () => 
   // subagent work alone still counts as activity
   assert.equal(sessionKind({ entrypoint: 'cli', usage: {}, subagentUsage: used }), null);
 });
+
+// --- prompt-derived titles: drop the "In <where>," preamble ---
+const { tidyPromptTitle } = require('../lib/transcripts');
+
+test('tidyPromptTitle drops a leading location clause', () => {
+  assert.equal(tidyPromptTitle('In /Users/jo/Local Sites/strataWP: four untracked `ruvector.db` artifacts keep appearing'),
+    'four untracked `ruvector.db` artifacts keep appearing');
+  assert.equal(tidyPromptTitle('In the StrataWP monorepo, only `examples/basic-theme` has a typecheck script'),
+    'only `examples/basic-theme` has a typecheck script');
+  assert.equal(tidyPromptTitle('In the StrataWP monorepo at `/Users/jo/Local Sites/strataWP` (branch `feat/x`), the Wo block is wrong'),
+    'the Wo block is wrong');
+  assert.equal(tidyPromptTitle('In the StrataWP SEO plugin repo (/Users/jo/seo, main), `normalize_source` drops query strings'),
+    '`normalize_source` drops query strings');
+});
+
+test('tidyPromptTitle keeps the file name when the clause points at a file', () => {
+  assert.equal(tidyPromptTitle('In /Users/jo/themes/jonimms-theme/quick-deploy.sh, the rsync exclude list is wrong'),
+    'quick-deploy.sh: the rsync exclude list is wrong');
+  assert.equal(tidyPromptTitle('In wp-content/plugins/seo/includes/class-backlinks.php (jonimms.com repo, /Users/jo/a), links break'),
+    'class-backlinks.php: links break');
+});
+
+test('tidyPromptTitle leaves ordinary prompts alone, apart from home paths', () => {
+  assert.equal(tidyPromptTitle('make sure main is at its latest.'), 'make sure main is at its latest.');
+  assert.equal(tidyPromptTitle('Independent of that, fix the build'), 'Independent of that, fix the build');
+  assert.equal(tidyPromptTitle('In short, fix it'), 'In short, fix it'); // nothing location-like in the clause
+  assert.equal(tidyPromptTitle('check /Users/jo/Projects/site for broken links'), 'check ~/Projects/site for broken links');
+  assert.equal(tidyPromptTitle('In /Users/jo/x: ok'), 'In ~/x: ok'); // too little left after stripping
+});
+
+test('sessionTitle tidies prompt-derived titles but not AI or custom ones', () => {
+  const { sessionTitle } = require('../lib/transcripts');
+  const meta = { sessionId: 'abc12345-x', firstUserPrompt: 'In the StrataWP monorepo, the generator emits no apiVersion' };
+  assert.deepEqual(sessionTitle(meta), { title: 'the generator emits no apiVersion', source: 'first-prompt' });
+  assert.equal(sessionTitle({ ...meta, aiTitle: 'In the repo, do X' }).title, 'In the repo, do X');
+  assert.equal(sessionTitle({ ...meta, firstUserPrompt: 'x'.repeat(300) }).title.length, 120);
+});

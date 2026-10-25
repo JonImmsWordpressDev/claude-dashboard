@@ -3,7 +3,7 @@
 # Uses a global install. If there isn't one, prints the pinned command to run
 # instead of downloading anything itself.
 PORT="${CLAUDE_DASH_PORT:-4517}"
-PKG="claude-mission-control@1.21.0"
+PKG="claude-mission-control@1.22.0"
 URL="http://127.0.0.1:$PORT"
 
 up() { curl -sf --max-time 1 "$URL/api/health" >/dev/null 2>&1; }

@@ -11,7 +11,7 @@ The Mission Control statusline is the command `claude-dashboard statusline`. It 
 
 `❯ acme-storefront needs you · Opus 5.5 · ctx 41% · 5h 64% → 3:40 PM · $3.20`
 
-If the check printed MISSING, tell the user to install the package first, and show them the exact command: `npm install -g claude-mission-control@1.21.0` (or `brew install claude-dashboard`). If it printed OUTDATED, tell them their installed version is too old for the statusline and show them the update command: `npm install -g claude-mission-control@1.21.0` (or `brew upgrade claude-dashboard`). Do not run either command yourself; the user runs it. Do not show the settings block until the check says READY, because an older version would try to start the server from the statusline. The statusline runs every few seconds, so it can't go through npx.
+If the check printed MISSING, tell the user to install the package first, and show them the exact command: `npm install -g claude-mission-control@1.22.0` (or `brew install claude-dashboard`). If it printed OUTDATED, tell them their installed version is too old for the statusline and show them the update command: `npm install -g claude-mission-control@1.22.0` (or `brew upgrade claude-dashboard`). Do not run either command yourself; the user runs it. Do not show the settings block until the check says READY, because an older version would try to start the server from the statusline. The statusline runs every few seconds, so it can't go through npx.
 
 Then show them this block for `~/.claude/settings.json`:
 
