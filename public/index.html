@@ -31,23 +31,25 @@
     src: url('/fonts/Oswald-Variable.woff2') format('woff2');
     font-weight: 200 700; font-style: normal; font-display: swap;
   }
-  /* Departures board: blue-black enamel, ivory flap letters, amber is the
-     loudest color (needs you), green is a small "boarding" lamp, red means
-     broken. Oswald condensed caps carry names; JetBrains Mono carries data.
-     Light theme is the same timetable, printed on paper. */
+  /* Departures board: blue-black enamel, amber is the loudest color (needs
+     you), green is a small "boarding" lamp, red means broken. Prose is the
+     system sans, data is JetBrains Mono, and the split-flap status lamp is
+     the one place Oswald caps survive. Light theme is the same board on paper. */
   :root {
     --disp-font: 'Oswald', 'Arial Narrow', sans-serif;
-    --bg: #f5f4f0;
-    --surface: #ecebe5;
-    --surface2: #e0dfd8;
+    --ui-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+    --mono-font: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --bg: #f1f0eb;
+    --surface: #fbfbf8;
+    --surface2: #e6e5df;
     --ink: #1b2022;
     --muted: #596264;
-    --faint: #8d9496;
-    --line: #d5d4cc;
+    --faint: #8a9193;
+    --line: #dddcd4;
     --accent: #1d7a44;
     --warn: #a66a00;
     --bad: #bd3524;
-    --chip-bg: #e0dfd8;
+    --chip-bg: #ecebe5;
     --warn-bg: rgba(166, 106, 0, 0.10);
     --accent-bg: rgba(29, 122, 68, 0.08);
     --glow: none;
@@ -82,6 +84,7 @@
      so it overrides both light and dark palettes. */
   :root[data-theme="phosphor"] {
     --disp-font: 'JetBrains Mono', ui-monospace, monospace;
+    --ui-font: 'JetBrains Mono', ui-monospace, monospace;
     --bg: #050a06;
     --surface: #0a120c;
     --surface2: #122015;
@@ -106,6 +109,7 @@
      and "needs you" is the white-hot bright intensity. Red still means broken. */
   :root[data-theme="amber"] {
     --disp-font: 'JetBrains Mono', ui-monospace, monospace;
+    --ui-font: 'JetBrains Mono', ui-monospace, monospace;
     --bg: #0a0602;
     --surface: #140d04;
     --surface2: #1f1508;
@@ -179,10 +183,12 @@
   body {
     background: var(--bg);
     color: var(--ink);
-    font: 12.5px/1.5 'JetBrains Mono', ui-monospace, "SF Mono", Menlo, monospace;
+    font: 13.5px/1.5 var(--ui-font);
     padding-bottom: 48px;
+    -webkit-font-smoothing: antialiased;
   }
-  .mono { font-family: inherit; }
+  /* Numbers, costs, branches and commands stay monospaced; prose does not. */
+  .mono, code, pre, kbd, .badge, .num { font-family: var(--mono-font); font-variant-numeric: tabular-nums; }
   ::selection { background: var(--warn); color: var(--amber-ink); }
 
   /* Display face: condensed caps, the board's letter-painted voice. */
@@ -206,99 +212,100 @@
   .flap.flip { animation: flapflip 0.3s ease-out; transform-origin: 50% 50%; }
   @media (prefers-reduced-motion: reduce) { .flap.flip { animation: none; } }
 
-  /* ---------- header: the station sign ---------- */
+  /* ---------- header ---------- */
   header {
-    display: flex; align-items: center; gap: 16px;
+    display: flex; align-items: center; gap: 14px;
     flex-wrap: wrap; row-gap: 10px;
-    padding: 12px 20px;
-    border-bottom: 2px solid var(--line);
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--line);
     background: var(--surface);
   }
   header h1 {
-    font-family: var(--disp-font);
-    font-size: 19px; font-weight: 600; letter-spacing: 0.10em;
-    text-transform: uppercase; white-space: nowrap;
+    font-size: 15px; font-weight: 650; letter-spacing: -0.01em; white-space: nowrap;
   }
-  header h1 .tilde { color: var(--warn); }
-  #clock {
-    font-size: 14px; font-weight: 700; color: var(--ink);
-    letter-spacing: 0.08em; font-variant-numeric: tabular-nums;
-  }
+  #clock { display: none; }
   #conn {
-    width: 7px; height: 7px; border-radius: 50%;
+    width: 8px; height: 8px; border-radius: 50%;
     background: var(--faint); flex: none;
   }
   #conn.on { background: var(--accent); box-shadow: var(--glow) var(--accent); }
   #conn.retry { background: var(--warn); }
   .spacer { flex: 1; }
 
-  #quota { display: flex; gap: 18px; align-items: center; font-size: 12px; color: var(--muted); }
+  #quota { display: flex; gap: 20px; align-items: center; font-size: 12.5px; color: var(--muted); }
   #quota.stale { opacity: 0.45; }
-  .meter { display: flex; align-items: center; gap: 7px; }
+  #quota .q-spend { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  #quota .q-spend .num { color: var(--ink); }
+  .meter { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .meter .m-pct { color: var(--ink); font-family: var(--mono-font); font-size: 12px; min-width: 3ch; }
   .meter .bar {
-    width: 72px; height: 5px; border-radius: 3px;
+    width: 64px; height: 6px; border-radius: 3px;
     background: var(--surface2); overflow: hidden;
   }
   .meter .fill { height: 100%; border-radius: 3px; background: var(--accent); }
   .meter .fill.hot { background: var(--warn); }
   .meter .fill.crit { background: var(--bad); }
-  .meter .eta { color: var(--warn); white-space: nowrap; }
+  .meter .eta { color: var(--warn); white-space: nowrap; font-family: var(--mono-font); font-size: 12px; }
 
-  /* ---------- live rail: the departures rows ---------- */
+  /* Section headings: plain sentence case, the count as a quiet number. */
+  .sec-head {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 14px; font-weight: 600; color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .sec-head .n { color: var(--faint); font-weight: 500; font-family: var(--mono-font); font-size: 12.5px; }
+
+  /* ---------- live rail ---------- */
   #live {
     position: sticky; top: 0; z-index: 5;
     background: var(--bg);
-    padding: 14px 20px 14px;
-    border-bottom: 2px solid var(--line);
+    padding: 18px 24px 16px;
+    border-bottom: 1px solid var(--line);
   }
-  #live .rail-label {
-    font-family: var(--disp-font);
-    font-size: 12px; text-transform: uppercase; letter-spacing: 0.22em;
-    color: var(--faint); margin-bottom: 10px;
-  }
-  #live .rows { display: flex; flex-direction: column; gap: 5px; }
+  #live .rows { display: flex; flex-direction: column; gap: 6px; }
   .dep-row {
     display: grid;
-    grid-template-columns: 52px minmax(150px, 230px) 1fr max-content;
-    gap: 2px 16px; align-items: center;
+    grid-template-columns: minmax(140px, 220px) 1fr max-content;
+    gap: 2px 18px; align-items: center;
     background: var(--surface);
-    border-radius: 2px;
-    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 14px 10px 16px;
   }
-  .dep-row.waiting { background: var(--warn-bg); box-shadow: inset 2px 0 0 var(--warn); }
-  .dep-time { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .dep-row.waiting { background: var(--warn-bg); border-color: var(--warn); }
+  .dep-time { display: none; }
   .dep-proj {
-    font-size: 19px; line-height: 1.15; color: var(--ink);
+    font-size: 15px; font-weight: 600; line-height: 1.25; color: var(--ink);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     min-width: 0;
   }
-  .dep-proj .badge { vertical-align: 3px; }
+  .dep-proj .badge { vertical-align: 1px; font-weight: 400; }
   .dep-mid { min-width: 0; }
   .dep-title {
-    font-size: 12.5px; color: var(--muted); cursor: pointer;
+    font-size: 13.5px; color: var(--ink); cursor: pointer;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .dep-title:hover { color: var(--ink); }
+  .dep-title:hover { color: var(--accent); }
   .dep-task {
-    margin-top: 2px; font-size: 11.5px; color: var(--ink);
+    margin-top: 2px; font-size: 12px; color: var(--muted);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .dep-task .prompt-ch { color: var(--accent); margin-right: 6px; }
   .dep-task .count { color: var(--faint); margin-left: 6px; }
   .dep-reason {
-    margin-top: 2px; font-size: 11.5px; color: var(--muted);
+    margin-top: 2px; font-size: 12.5px; color: var(--ink);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .dep-reason .glyph { color: var(--warn); margin-right: 6px; font-weight: 600; }
-  .dep-right { display: flex; align-items: center; gap: 10px; justify-self: end; }
-  .dep-elapsed { color: var(--faint); font-size: 12px; }
+  .dep-right { display: flex; align-items: center; gap: 14px; justify-self: end; }
+  .dep-elapsed { color: var(--faint); font-size: 12px; font-family: var(--mono-font); }
   .dep-elapsed.overdue { color: var(--warn); font-weight: 600; }
   .unpriced { color: var(--warn); font-weight: 700; margin-left: 2px; cursor: help; }
-  .dep-cost { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; min-width: 52px; }
+  .dep-cost { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; min-width: 52px; font-family: var(--mono-font); }
   .dep-cost-main { color: var(--muted); font-size: 12px; }
   .dep-burn { color: var(--faint); font-size: 10.5px; }
-  .ctx { display: inline-flex; flex-direction: column; gap: 2px; min-width: 64px; }
-  .ctx-label { font-size: 10.5px; color: var(--faint); text-align: right; white-space: nowrap; }
+  .ctx { display: inline-flex; flex-direction: column; gap: 3px; min-width: 64px; }
+  .ctx-label { font-size: 10.5px; color: var(--faint); text-align: right; white-space: nowrap; font-family: var(--mono-font); }
   .ctx-bar { height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
   .ctx-fill { height: 100%; background: var(--accent); }
   .ctx.warn .ctx-fill { background: var(--warn); }
@@ -307,7 +314,11 @@
   .ctx.bad .ctx-label { color: var(--bad); }
   .mc-meta .failed { color: var(--warn); }
   .mc-meta.overdue { color: var(--warn); font-weight: 600; }
-  .st { font-size: 11.5px; letter-spacing: 0.14em; padding: 3px 10px 2px; }
+  /* The status lamp is the one split-flap left: the loudest thing on screen. */
+  .st {
+    font-family: var(--disp-font); text-transform: uppercase; font-weight: 500;
+    font-size: 11.5px; letter-spacing: 0.12em; padding: 3px 10px 2px;
+  }
   .st.st-busy { color: var(--accent); }
   .st.st-waiting {
     background: var(--warn); color: var(--amber-ink); font-weight: 600;
@@ -315,105 +326,130 @@
   }
   .st.st-waiting::after { background: rgba(0, 0, 0, 0.22); }
   .st.st-quiet { color: var(--warn); }
-  @media (max-width: 700px) {
-    .dep-row { grid-template-columns: 44px 1fr max-content; }
-    .dep-mid { grid-column: 1 / -1; }
+  .live-none { color: var(--muted); font-size: 13px; }
+  .live-none code { color: var(--ink); }
+
+  /* Row actions (rename / open / copy) wait for hover so titles get the room. */
+  .acts { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+  @media (hover: hover) {
+    .acts { opacity: 0; transition: opacity 0.12s; }
+    li:hover > .acts, li:focus-within > .acts,
+    .dep-row:hover .acts, .dep-row:focus-within .acts,
+    .pin-row:hover .acts, .pin-row:focus-within .acts,
+    .digest-item:hover .acts, .digest-item:focus-within .acts { opacity: 1; }
   }
-  .live-none { color: var(--faint); font-size: 13px; }
-  .live-none code { color: var(--muted); }
+
+  /* In the narrow project cards the actions float over the row's right end. */
+  @media (hover: hover) {
+    .sessions li { position: relative; }
+    .sessions li > .acts {
+      position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+      padding-left: 28px;
+      background: linear-gradient(to right, transparent, var(--surface) 24px);
+      pointer-events: none;
+    }
+    .sessions li:hover > .acts, .sessions li:focus-within > .acts { pointer-events: auto; }
+  }
+  .card .new-btn { font-size: 16px; line-height: 1; padding: 2px 7px; color: var(--faint); }
+  .card .new-btn:hover { color: var(--accent); }
 
   /* ---------- project grid ---------- */
-  main { padding: 18px 20px; }
+  main { padding: 22px 24px; }
   #grid {
     display: grid; gap: 14px;
-    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   }
   .card {
     background: var(--surface);
-    border-radius: 2px;
-    border-top: 2px solid var(--line);
-    padding: 12px 16px 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px 8px;
     display: flex; flex-direction: column;
+    min-width: 0;
   }
   .card .head { display: flex; align-items: center; gap: 8px; }
   .card .name {
-    font-family: var(--disp-font);
-    text-transform: uppercase; letter-spacing: 0.05em;
-    font-weight: 500; font-size: 15px;
+    font-weight: 600; font-size: 15px; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
   }
-  .card .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; box-shadow: var(--glow) var(--accent); }
-  .card .spark { margin-left: auto; }
-  .card .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 7px; font-size: 11px; }
+  .card .name:hover { color: var(--accent); }
+  .card .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; box-shadow: var(--glow) var(--accent); }
+  .card .spark { margin-left: auto; opacity: 0.8; flex: none; }
+  .card .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 11.5px; }
   .badge {
-    padding: 0 6px; border-radius: 2px; background: var(--chip-bg); color: var(--muted);
-    font-family: inherit; font-size: 11px;
+    padding: 1px 6px; border-radius: 4px; background: var(--chip-bg); color: var(--muted);
+    font-size: 11px; white-space: nowrap;
   }
   .badge.dirty { color: var(--warn); }
   .badge.ahead { color: var(--accent); }
   .badge.err { color: var(--bad); }
   .badge.bg { color: var(--accent); letter-spacing: 0.06em; }
   .badge.missing { color: var(--bad); }
+  .badge.changes { cursor: pointer; }
   .note-mark { color: var(--warn); cursor: default; font-size: 12px; flex: none; }
   #note-editor { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 6px; }
   #note-editor textarea {
     width: 100%; min-height: 72px; resize: vertical; box-sizing: border-box;
-    font: 12.5px 'JetBrains Mono', ui-monospace, monospace; color: var(--ink);
-    background: var(--surface); border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px;
+    font: 12.5px var(--mono-font); color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
   }
   #note-editor .hint { color: var(--faint); font-size: 11px; }
-  .card .when { color: var(--faint); font-size: 11px; margin-left: auto; }
+  .card .when { color: var(--faint); font-size: 11.5px; margin-left: auto; }
   .sessions { list-style: none; padding: 0; margin: 10px 0 0; border-top: 1px solid var(--line); }
   .sessions li {
     display: flex; align-items: center; gap: 8px;
     padding: 7px 0; border-bottom: 1px solid var(--line);
-    font-size: 12.5px;
+    font-size: 13px; min-height: 34px;
   }
   .sessions li:last-child { border-bottom: none; }
-  .sessions .s-title {
+  .sessions .s-title, #pinned .s-title {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--ink); flex: 1;
+    color: var(--ink); flex: 1; min-width: 0;
   }
-  .sessions .s-title .wt { color: var(--accent); font-size: 11px; margin-right: 5px; }
-  .sessions .s-when { color: var(--faint); font-size: 11px; flex: none; }
+  .sessions .s-title .wt { color: var(--accent); font-size: 11.5px; margin-right: 5px; }
+  .s-when { color: var(--faint); font-size: 11.5px; flex: none; white-space: nowrap; }
   .copy {
-    flex: none; border: none; background: none; color: var(--faint);
-    font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 5px;
+    flex: none; border: none; background: none; color: var(--muted);
+    font-size: 12px; cursor: pointer; padding: 3px 7px; border-radius: 5px;
     font-family: inherit;
   }
   .copy:hover { background: var(--surface2); color: var(--ink); }
   .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .open-btn { color: var(--accent); }
-  #open-pref-wrap { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  #open-pref-wrap { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  #open-pref-wrap[hidden] { display: none; }
   #open-pref {
     font: inherit; color: var(--ink);
     background: var(--surface2); border: 1px solid var(--line);
-    border-radius: 2px; padding: 2px 6px;
+    border-radius: 6px; padding: 3px 6px;
   }
   #search {
     font: inherit; color: var(--ink);
-    background: var(--surface2); border: 1px solid var(--line);
-    border-radius: 2px; padding: 4px 10px; width: 190px; margin-left: 14px;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 12px; width: 260px; margin-left: 10px;
   }
-  #search:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  #search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   #search::placeholder { color: var(--faint); }
-  /* A full set of meters needs ~1600px; tighten before the header wraps. */
-  @media (max-width: 1600px) {
+  /* A full set of meters needs room; tighten before the header wraps. */
+  @media (max-width: 1500px) {
     header { gap: 12px; }
-    #search { width: 120px; }
+    #search { width: 180px; }
     #open-pref-wrap .open-label { display: none; }
-    #quota { gap: 12px; }
+    #quota { gap: 14px; }
     .meter .bar { width: 44px; }
+    #wk-chart { display: none; }
   }
-  #gear, #mc-btn, #bell-btn {
+  .hd-btn {
     border: none; background: none; color: var(--muted); cursor: pointer;
-    font-size: 15px; padding: 2px 6px; border-radius: 2px; margin-left: 4px;
+    font-size: 15px; line-height: 1; padding: 6px 8px; border-radius: 6px;
   }
-  #gear:hover, #mc-btn:hover, #bell-btn:hover { background: var(--surface2); color: var(--ink); }
+  .hd-btn:hover { background: var(--surface2); color: var(--ink); }
+  .hd-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   #bell-btn { position: relative; }
   #bell-badge {
-    position: absolute; top: -3px; right: -3px;
+    position: absolute; top: -2px; right: -2px;
     background: var(--warn); color: var(--amber-ink);
-    font: 700 9.5px 'JetBrains Mono', monospace;
+    font: 700 9.5px var(--mono-font);
     border-radius: 8px; padding: 1px 4px; min-width: 10px; text-align: center;
   }
 
@@ -429,11 +465,11 @@
   .set-row input[type="text"] {
     font: inherit; color: var(--ink);
     background: var(--surface2); border: 1px solid var(--line);
-    border-radius: 2px; padding: 4px 8px; width: 170px;
+    border-radius: 6px; padding: 4px 8px; width: 170px;
   }
   .set-row select {
     font: inherit; color: var(--ink); background: var(--surface2);
-    border: 1px solid var(--line); border-radius: 2px; padding: 3px 6px;
+    border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px;
   }
   .set-row input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
 
@@ -445,7 +481,7 @@
   .rename-input {
     font: inherit; font-size: 12.5px; color: var(--ink);
     background: var(--surface2); border: 1px solid var(--accent);
-    border-radius: 2px; padding: 2px 6px; flex: 1; min-width: 0; width: 100%;
+    border-radius: 6px; padding: 2px 6px; flex: 1; min-width: 0; width: 100%;
     box-sizing: border-box;
   }
   .rename-input:focus { outline: none; }
@@ -457,8 +493,7 @@
     border-radius: 3px; padding: 8px 12px; font-size: 13px;
     white-space: pre-wrap; overflow-wrap: break-word;
   }
-  .t-user .t-who { color: var(--accent); font-size: 10px; text-transform: uppercase;
-    letter-spacing: 0.08em; display: block; margin-bottom: 3px; }
+  .t-user .t-who { color: var(--accent); font-size: 11.5px; font-weight: 600; display: block; margin-bottom: 3px; }
   .t-tool {
     font-family: inherit; font-size: 11.5px;
     color: var(--muted); padding: 1px 0 1px 10px;
@@ -476,16 +511,11 @@
   .none-yet { color: var(--faint); font-size: 12px; padding: 10px 0 4px; }
 
   /* ---------- pinned strip ---------- */
-  #pinned { margin-bottom: 16px; }
-  #pinned .pin-label {
-    font-family: var(--disp-font);
-    font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.22em;
-    color: var(--faint); margin-bottom: 6px;
-  }
+  #pinned { margin-bottom: 22px; }
   #pinned .pin-row {
-    display: flex; align-items: baseline; gap: 10px;
-    background: var(--surface); border-radius: 2px;
-    padding: 7px 14px; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px; margin-bottom: 6px; min-height: 38px;
   }
   #pinned .pin-row .star { color: var(--warn); flex: none; }
 
@@ -509,78 +539,71 @@
 
   /* ---------- git attention strip ---------- */
   #git-attn {
-    display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px;
-    background: var(--warn-bg);
-    border: 1px solid var(--line); border-radius: 3px;
-    padding: 8px 14px; margin-bottom: 16px;
-    font-size: 12.5px;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px;
+    border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 8px;
+    background: var(--surface);
+    padding: 10px 16px; margin-bottom: 22px;
+    font-size: 13px;
   }
-  #git-attn .ga-label { color: var(--warn); font-weight: 600; white-space: nowrap; }
-  #git-attn .ga-item { color: var(--ink); white-space: nowrap; }
-  #git-attn .ga-item .badge { margin-left: 4px; }
+  #git-attn .ga-label { color: var(--ink); font-weight: 600; white-space: nowrap; }
+  #git-attn .ga-item { color: var(--muted); white-space: nowrap; }
+  #git-attn .ga-item .badge { margin-left: 5px; }
 
   /* ---------- digest ---------- */
-  #digest { margin-bottom: 20px; }
-  #digest summary {
+  #digest { margin-bottom: 28px; }
+  #digest summary, #dormant summary {
     cursor: pointer; user-select: none; list-style: none;
     display: flex; align-items: center; gap: 12px;
   }
-  #digest summary::-webkit-details-marker { display: none; }
-  #digest-label {
-    font-family: var(--disp-font);
-    font-size: 12px; text-transform: uppercase; letter-spacing: 0.22em;
-    color: var(--faint);
+  #digest summary::-webkit-details-marker, #dormant summary::-webkit-details-marker { display: none; }
+  #digest summary .sec-head, #dormant summary .sec-head { margin-bottom: 0; }
+  .sec-head .caret {
+    display: inline-block; width: 10px; color: var(--faint); font-size: 10px;
+    transition: transform 0.12s;
   }
-  #digest-label::before { content: '▸ '; }
-  #digest[open] #digest-label::before { content: '▾ '; }
-  #digest-range { display: none; gap: 2px; }
+  details[open] > summary .caret { transform: rotate(90deg); }
+  #digest-range { display: none; padding: 2px; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
   #digest[open] #digest-range { display: inline-flex; }
   #digest-range button {
-    font: 11px 'JetBrains Mono', ui-monospace, monospace; color: var(--muted);
-    background: none; border: 1px solid var(--line); cursor: pointer;
-    padding: 2px 9px;
+    font: 12px var(--ui-font); color: var(--muted);
+    background: none; border: none; border-radius: 5px; cursor: pointer;
+    padding: 3px 10px;
   }
-  #digest-range button:first-child { border-radius: 6px 0 0 6px; }
-  #digest-range button:last-child { border-radius: 0 2px 2px 0; }
+  #digest-range button:hover { color: var(--ink); }
   #digest-range button.sel { background: var(--surface2); color: var(--ink); }
-  #digest-body { margin-top: 10px; }
+  #digest-body { margin-top: 12px; }
   .digest-day {
-    font-family: var(--disp-font);
-    color: var(--faint); font-size: 11.5px; text-transform: uppercase;
-    letter-spacing: 0.22em; margin: 16px 0 6px;
+    color: var(--muted); font-size: 12.5px; font-weight: 500;
+    margin: 16px 0 8px;
   }
+  .digest-day:first-child { margin-top: 0; }
   .digest-item {
-    background: var(--surface); border-radius: 2px;
-    padding: 9px 14px; margin-bottom: 5px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 6px;
   }
-  .digest-item .di-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .digest-item .di-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .digest-item .di-proj {
-    font-family: var(--disp-font);
-    text-transform: uppercase; letter-spacing: 0.05em;
-    font-weight: 500; font-size: 14.5px;
+    font-weight: 600; font-size: 13.5px; flex: none;
+    max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .digest-item .di-title { color: var(--muted); font-size: 13px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 140px; }
-  .digest-item .di-when { color: var(--faint); font-size: 11px; }
+  .digest-item .di-title { color: var(--muted); font-size: 13.5px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .digest-item .di-when { color: var(--faint); font-size: 11.5px; font-family: var(--mono-font); white-space: nowrap; flex: none; }
   .digest-item .di-summary {
-    margin-top: 6px; font-size: 12.5px; color: var(--ink); line-height: 1.5;
+    margin-top: 6px; font-size: 13px; color: var(--ink); line-height: 1.55; max-width: 110ch;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     cursor: pointer;
   }
   .digest-item .di-summary.expanded { display: block; }
-  .digest-item .di-tasks { margin-top: 5px; font-size: 11px; color: var(--faint); }
+  .digest-item .di-tasks { margin-top: 5px; font-size: 12px; color: var(--faint); }
   .digest-item .di-tasks .done { color: var(--accent); }
-  .digest-empty { color: var(--faint); font-size: 12.5px; padding: 6px 0; }
+  .digest-empty { color: var(--faint); font-size: 13px; padding: 6px 0; }
 
   /* ---------- dormant ---------- */
-  #dormant { margin-top: 26px; }
-  #dormant summary {
-    font-family: var(--disp-font);
-    cursor: pointer; color: var(--faint); font-size: 12px;
-    text-transform: uppercase; letter-spacing: 0.22em; user-select: none;
-  }
+  #dormant { margin-top: 32px; }
+  #grid + #dormant summary .sec-head { color: var(--muted); }
   #dormant .cards { margin-top: 12px; display: grid; gap: 14px;
-    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
   #dormant .card { opacity: 0.75; }
 
   /* ---------- mission control ---------- */
@@ -592,13 +615,10 @@
   #mc[hidden] { display: none !important; }
   .mc-head {
     display: flex; align-items: center; gap: 14px;
-    padding: 12px 20px; border-bottom: 2px solid var(--line);
+    padding: 12px 24px; border-bottom: 1px solid var(--line);
     background: var(--surface); flex: none;
   }
-  .mc-title {
-    font-family: var(--disp-font);
-    font-size: 16px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
-  }
+  .mc-title { font-size: 15px; font-weight: 650; }
   .mc-sub { color: var(--faint); font-size: 12px; }
   #mc-grid {
     flex: 1; overflow-y: auto;
@@ -609,7 +629,7 @@
   #mc-grid .mc-empty { color: var(--faint); font-size: 13px; padding: 24px 0; }
   .mc-pane {
     display: flex; flex-direction: column;
-    background: var(--surface); border-radius: 2px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
     height: min(46vh, 480px); min-width: 0;
   }
   .mc-pane.waiting { box-shadow: inset 0 2px 0 var(--warn); }
@@ -621,9 +641,7 @@
   .mc-pane-head .mc-proj { min-width: 0; flex: 0 1 auto; }
   .mc-stats { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
   .mc-pane-head .mc-proj {
-    font-family: var(--disp-font);
-    text-transform: uppercase; letter-spacing: 0.05em;
-    font-weight: 500; font-size: 15px; cursor: pointer;
+    font-weight: 600; font-size: 14.5px; cursor: pointer;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .mc-pane-head .mc-proj:hover { color: var(--warn); }
@@ -649,8 +667,8 @@
     display: grid; gap: 10px; padding: 14px 20px 0;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
-  .hv-tile { background: var(--surface); border-radius: 2px; padding: 9px 12px; min-width: 0; }
-  .hv-tile .k { color: var(--faint); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .hv-tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-width: 0; }
+  .hv-tile .k { color: var(--muted); font-size: 12px; font-weight: 500; }
   .hv-tile .v { font-family: var(--disp-font); font-size: 26px; font-weight: 500; line-height: 1.15; }
   .hv-tile .s { color: var(--faint); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hv-tile.warn .v, .hv-tile .eta { color: var(--warn); }
@@ -661,7 +679,7 @@
   }
   .hv-empty { color: var(--faint); font-size: 13px; padding: 24px 20px; }
   .hv-card {
-    background: var(--surface); border-radius: 2px; min-width: 0;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0;
     border-top: 3px solid var(--hue); display: flex; flex-direction: column;
   }
   .hv-card.waiting { border-top-color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn-bg); }
@@ -683,14 +701,14 @@
   .hv-money .big { font-family: var(--disp-font); font-size: 38px; font-weight: 500; line-height: 1; }
   .hv-money .rate { color: var(--muted); font-size: 12px; }
   .hv-state {
-    margin: 0 14px; padding: 7px 10px; border-radius: 2px; background: var(--surface2);
+    margin: 0 14px; padding: 7px 10px; border-radius: 6px; background: var(--surface2);
     display: flex; gap: 10px; align-items: center; min-width: 0; font-size: 12px;
   }
   .hv-state .txt { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hv-card.waiting .hv-state { background: var(--warn-bg); }
   .hv-card.waiting .hv-state .txt { color: var(--ink); }
   .hv-sec { padding: 12px 14px 0; }
-  .hv-label { color: var(--faint); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; }
+  .hv-label { color: var(--muted); font-size: 12px; font-weight: 500; display: flex; justify-content: space-between; gap: 8px; }
   .hv-call { margin-top: 5px; font-size: 13px; display: flex; gap: 6px; min-width: 0; }
   .hv-call .verb { color: var(--muted); flex: none; }
   .hv-call .tgt { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -702,7 +720,7 @@
   .hv-task { margin-top: 6px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hv-task .prompt-ch { color: var(--accent); margin-right: 6px; }
   .hv-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px 14px 0; }
-  .hv-bar .row { display: flex; justify-content: space-between; color: var(--faint); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .hv-bar .row { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
   .hv-bar .row b { color: var(--muted); font-weight: 500; letter-spacing: 0; }
   .hv-bar .track { height: 4px; background: var(--surface2); margin-top: 5px; border-radius: 2px; overflow: hidden; }
   .hv-bar .fill { display: block; height: 100%; background: var(--hue); }
@@ -712,14 +730,14 @@
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
     padding: 12px 14px 12px; margin-top: 12px; border-top: 1px solid var(--line);
   }
-  .hv-foot .k { color: var(--faint); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .hv-foot .k { color: var(--muted); font-size: 12px; }
   .hv-foot .v { font-size: 13px; margin-top: 2px; }
   .hv-foot .v.bad { color: var(--bad); }
   .hv-note { color: var(--faint); font-size: 11px; padding: 0 20px 24px; }
   .fm-sum { color: var(--muted); font-size: 12px; margin: 4px 0 14px; }
-  .fm-award { margin: 0 0 18px; padding: 12px 14px; background: var(--surface); border-radius: 2px; }
+  .fm-award { margin: 0 0 18px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
   .fm-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .fm-title { font-family: var(--disp-font); font-size: 18px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .fm-title { font-size: 16px; font-weight: 650; }
   .fm-blurb { color: var(--faint); font-size: 11.5px; flex: 1; min-width: 0; }
   .fm-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); min-width: 0; }
   .fm-head + .fm-row { border-top: none; margin-top: 6px; }
@@ -742,7 +760,7 @@
 
   .mc-agents .agents { max-height: 160px; overflow-y: auto; }
   .agents { padding: 4px 12px 6px; border-bottom: 1px solid var(--line); font-size: 11.5px; flex: none; }
-  .agents .team { color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10.5px; margin-bottom: 2px; }
+  .agents .team { color: var(--muted); font-size: 12px; font-weight: 500; margin-bottom: 2px; }
   .agents .agent { display: flex; align-items: center; gap: 7px; line-height: 1.6; }
   .agents .swatch { width: 7px; height: 7px; border-radius: 50%; flex: none; }
   .agents .aname { color: var(--ink); }
@@ -771,10 +789,7 @@
     display: flex; align-items: baseline; gap: 10px;
     padding: 16px 22px 12px; border-bottom: 1px solid var(--line);
   }
-  #drawer .d-head h2 {
-    font-family: var(--disp-font);
-    font-size: 17px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
-  }
+  #drawer .d-head h2 { font-size: 17px; font-weight: 650; }
   #drawer .d-head .d-path {
     color: var(--faint); font-size: 11px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
@@ -782,15 +797,15 @@
   #drawer .d-actions { display: flex; gap: 2px; align-items: center; flex: none; }
   #drawer .d-close {
     border: none; background: none; color: var(--muted); cursor: pointer;
-    font-size: 18px; padding: 2px 8px; border-radius: 2px;
+    font-size: 18px; padding: 2px 8px; border-radius: 6px;
   }
   #drawer .d-close:hover { background: var(--surface2); color: var(--ink); }
   #drawer .d-body { overflow-y: auto; padding: 6px 22px 40px; }
   .d-section { margin-top: 18px; }
   .d-section > summary {
     cursor: pointer; user-select: none; list-style: none;
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--faint); padding: 4px 0;
+    font-size: 13px; font-weight: 600;
+    color: var(--muted); padding: 4px 0;
   }
   .d-section > summary::before { content: '▸ '; }
   .d-section[open] > summary::before { content: '▾ '; }
@@ -804,7 +819,11 @@
     font-size: 12px; color: var(--accent); margin-bottom: 6px;
   }
   .d-sessions li { display: flex; align-items: center; gap: 8px;
-    padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+    padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; min-height: 36px; }
+  .d-sessions .s-title {
+    flex: 1; min-width: 0; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
   .d-sessions li:last-child { border-bottom: none; }
   .d-sessions { list-style: none; padding: 0; margin: 6px 0 0; }
 
@@ -820,7 +839,7 @@
     background: var(--surface2); padding: 1px 4px; border-radius: 4px;
   }
   .md pre {
-    background: var(--surface2); border-radius: 2px; padding: 10px 12px;
+    background: var(--surface2); border-radius: 6px; padding: 10px 12px;
     overflow-x: auto; margin: 8px 0;
   }
   .md pre code { background: none; padding: 0; }
@@ -833,7 +852,7 @@
   /* ---------- session changes panel ---------- */
   .badge.changes { color: var(--accent); cursor: pointer; }
   #changes-panel { margin-top: 10px; }
-  .d-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); padding: 4px 0; }
+  .d-section-title { font-size: 13px; font-weight: 600; color: var(--muted); padding: 4px 0; }
   .chg-file { border: 1px solid var(--line); border-radius: 3px; margin-top: 8px; background: var(--surface); }
   .chg-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; font-size: 12.5px; }
   .chg-head .chg-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
@@ -927,13 +946,13 @@
   }
   #welcome h2 { font-size: 14px; margin-bottom: 8px; }
   #welcome h2 .tilde { color: var(--accent); }
-  #welcome code { background: var(--surface2); padding: 1px 5px; border-radius: 2px; }
+  #welcome code { background: var(--surface2); padding: 1px 5px; border-radius: 6px; }
   #welcome p { color: var(--muted); font-size: 12.5px; }
 
   #toast {
     position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
     background: var(--ink); color: var(--bg);
-    padding: 7px 14px; border-radius: 2px; font-size: 12.5px;
+    padding: 7px 14px; border-radius: 6px; font-size: 12.5px;
     opacity: 0; transition: opacity 0.18s; pointer-events: none;
   }
   #toast.show { opacity: 1; }
@@ -941,19 +960,22 @@
   /* ---------- phones: everything in one column, nothing scrolls sideways ---------- */
   @media (max-width: 700px) {
     header { padding: 10px 16px; gap: 8px 10px; }
-    header h1 { font-size: 16px; }
-    #search { flex: 1 1 90px; width: auto; min-width: 0; margin-left: 0; }
+    header h1 { font-size: 15px; margin-right: auto; }
+    #search { order: 9; flex: 1 1 100%; width: auto; min-width: 0; margin-left: 0; }
     header .spacer, #open-pref-wrap { display: none; } /* opening terminals is a desk thing; still in settings */
     #quota { order: 10; flex: 1 1 100%; flex-wrap: wrap; gap: 8px 14px; }
     .meter .bar { width: 52px; }
     #live { padding: 12px 16px; }
     main { padding: 14px 16px; }
-    .dep-row { grid-template-columns: 44px 1fr; padding: 8px 12px; }
-    .dep-proj { font-size: 17px; }
+    .dep-row { grid-template-columns: 1fr; padding: 10px 12px; }
+    .dep-proj { font-size: 15px; }
     .dep-mid, .dep-right { grid-column: 1 / -1; }
     .dep-right { justify-self: stretch; flex-wrap: wrap; gap: 6px 10px; }
     .dep-title, .dep-reason { white-space: normal; overflow-wrap: anywhere; }
     #pinned .pin-row { flex-wrap: wrap; padding: 7px 12px; }
+    .digest-item .di-top { flex-wrap: wrap; row-gap: 2px; }
+    .digest-item .di-proj { max-width: none; flex: 1 1 auto; }
+    .digest-item .di-title { order: 9; flex: 1 1 100%; }
     #git-attn .ga-item { white-space: normal; }
     #drawer { width: 100vw; border-left: none; }
     #drawer .d-head { flex-wrap: wrap; padding: 12px 16px 10px; }
@@ -980,8 +1002,8 @@
 <body>
 <header>
   <div id="conn" title="connection"></div>
-  <h1>Claude<span class="tilde"> · </span>Mission Control</h1>
-  <input id="search" type="search" placeholder="Search…  ⏎" autocomplete="off">
+  <h1>Claude Mission Control</h1>
+  <input id="search" type="search" placeholder="Search sessions" aria-label="Search sessions" autocomplete="off">
   <div class="spacer"></div>
   <label id="open-pref-wrap"><span class="open-label">Open in</span>
     <select id="open-pref" aria-label="Open sessions in">
@@ -990,10 +1012,10 @@
   </label>
   <div id="quota"></div>
   <span id="clock" class="flap" title="board time"></span>
-  <button id="mc-btn" title="Mission Control — every live session at once">▦</button>
-  <button id="hive-btn" title="Hive: every live session as a character card">⬢</button>
-  <button id="bell-btn" title="Catch-up — what happened while you were away">🔔<span id="bell-badge" hidden></span></button>
-  <button id="gear" title="Settings">⚙</button>
+  <button id="mc-btn" class="hd-btn" title="Mission Control: every live session side by side" aria-label="Mission Control"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2.5" width="5" height="5" rx="1"/><rect x="9" y="2.5" width="5" height="5" rx="1"/><rect x="2" y="9.5" width="5" height="5" rx="1"/><rect x="9" y="9.5" width="5" height="5" rx="1"/></svg></button>
+  <button id="hive-btn" class="hd-btn" title="Hive: every live session as a character card" aria-label="Hive"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 13.4 4.9v6.2L8 14.2 2.6 11.1V4.9Z"/></svg></button>
+  <button id="bell-btn" class="hd-btn" title="Catch up on what happened while you were away" aria-label="Catch up"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.2 1.5H2.8Z"/><path d="M6.5 14a1.6 1.6 0 0 0 3 0"/></svg><span id="bell-badge" hidden></span></button>
+  <button id="gear" class="hd-btn" title="Settings" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg></button>
 </header>
 
 <section id="live"></section>
@@ -1002,13 +1024,14 @@
   <div id="git-attn" hidden></div>
   <details id="digest" open>
     <summary>
-      <span id="digest-label">Digest</span>
-      <span id="digest-range" role="group" aria-label="digest window">
-        <button data-days="1">day</button><button data-days="3">3 days</button><button data-days="7">week</button>
+      <span class="sec-head"><span class="caret">▶</span><span id="digest-label">Recent sessions</span><span class="n" id="digest-n"></span></span>
+      <span id="digest-range" role="group" aria-label="How far back">
+        <button data-days="1">Today</button><button data-days="3">3 days</button><button data-days="7">Week</button>
       </span>
     </summary>
     <div id="digest-body"></div>
   </details>
+  <div class="sec-head" id="grid-head" hidden>Projects <span class="n"></span></div>
   <div id="grid"></div>
   <details id="dormant" hidden>
     <summary></summary>
@@ -1155,7 +1178,7 @@ function meter(label, pct, title, extra = '') {
   return `<div class="meter" title="${esc(title || '')}">
     <span>${esc(label)}</span>
     <span class="bar"><span class="fill ${cls}" style="width:${Math.min(100, pct)}%"></span></span>
-    <span>${Math.round(pct)}%</span>${extra}
+    <span class="m-pct">${Math.round(pct)}%</span>${extra}
   </div>`;
 }
 
@@ -1218,6 +1241,11 @@ function modelShort(m) {
   return m.replace(/^claude-/, '').replace(/-\d{8}$/, '');
 }
 
+// Tooltip for a clickable session title; the model rides along instead of a chip.
+function titleTip(m, action = 'Click to read the transcript') {
+  return m ? `${modelShort(m)}. ${action}` : action;
+}
+
 function modelChip(m) {
   return m ? `<span class="badge" title="${esc(m)}">${esc(modelShort(m))}</span>` : '';
 }
@@ -1265,7 +1293,7 @@ function noteMark(sess) {
 
 function openBtn(sessionId) {
   if (liveIds.has(sessionId)) return '';
-  return `<button class="copy open-btn" data-open="${esc(sessionId)}" title="Open this session">open ⬈</button>`;
+  return `<button class="copy open-btn" data-open="${esc(sessionId)}" title="Open this session">open</button>`;
 }
 
 // "Δ n" — how many files Claude edited in this session. Opens the changes panel.
@@ -1325,16 +1353,14 @@ function liveCard(s) {
     ? ` <span class="badge bg" title="${BG_TIP}">BG</span>`
     : s.isWorktree ? ' <span class="badge">worktree</span>' : '';
   return `<div class="dep-row ${s.status === 'waiting' ? 'waiting' : ''}">
-    <span class="dep-time" title="session started">${esc(dep)}</span>
-    <span class="dep-proj disp">${esc(s.projectName)}${kindBadge}</span>
+    <span class="dep-proj" title="Started at ${esc(dep)}">${esc(s.projectName)}${kindBadge}</span>
     <div class="dep-mid">
-      <div class="dep-title" data-session="${esc(s.sessionId)}" title="Click to watch the transcript live">${esc(s.title || '')}</div>
+      <div class="dep-title" data-session="${esc(s.sessionId)}" title="${esc(titleTip(s.model, 'Click to watch the transcript live'))}">${esc(s.title || '')}</div>
       ${task}
       ${reason}
       ${bgDetail}
     </div>
     <div class="dep-right">
-      ${modelChip(s.model)}
       ${s.estCost != null ? `<span class="dep-cost">${costChip(s.estCost, { cls: 'dep-cost-main', assumed: s.assumed })}${
         s.burnRate ? `<span class="dep-burn" title="Spend per hour over the last 30 minutes">$${s.burnRate}/h</span>` : ''}</span>` : ''}
       ${contextMeter(s.context)}
@@ -1342,8 +1368,7 @@ function liveCard(s) {
         ? `<span class="dep-elapsed overdue" title="No reply for ${s.waitingMin} minutes — session started ${elapsed(s.startedAt)} ago">${waitLabel(s.waitingMin)}</span>`
         : `<span class="dep-elapsed">${elapsed(s.startedAt)}</span>`}
       ${statusFlap(s)}
-      ${renameBtn(s.sessionId, s.title)}
-      ${copyBtn(s.resumeCommand)}
+      <span class="acts">${renameBtn(s.sessionId, s.title)}${copyBtn(s.resumeCommand)}</span>
     </div>
   </div>`;
 }
@@ -1352,26 +1377,23 @@ function projectCard(p) {
   const sessions = p.sessions.length
     ? `<ul class="sessions">${p.sessions.map((sess) => `
         <li>
-          <span class="s-title" data-session="${esc(sess.sessionId)}" title="Click to read the transcript">${
+          <span class="s-title" data-session="${esc(sess.sessionId)}" title="${esc(titleTip(sess.model))}">${
             sess.worktree ? `<span class="wt mono">⎇ ${esc(sess.worktree)}</span>` : ''}${esc(sess.title)}</span>${noteMark(sess)}
-          ${modelChip(sess.model)}
           ${changesChip(sess)}
           <span class="s-when">${relTime(sess.lastActivityAt)}</span>
-          ${renameBtn(sess.sessionId, sess.title)}
-          ${openBtn(sess.sessionId)}
-          ${copyBtn(sess.resumeCommand)}
+          <span class="acts">${renameBtn(sess.sessionId, sess.title)}${openBtn(sess.sessionId)}${copyBtn(sess.resumeCommand)}</span>
         </li>`).join('')}</ul>`
     : '<div class="none-yet">No sessions recorded.</div>';
   return `<div class="card">
     <div class="head">
       ${p.isLive ? '<span class="live-dot" title="session running"></span>' : ''}
       <span class="name" data-detail="${esc(p.path)}" style="cursor:pointer" title="Click for project details">${esc(p.name)}</span>
-      <button class="copy" data-new="${esc(p.path)}" title="Start a new Claude session here (Ghostty)">⊕</button>
+      <button class="copy new-btn" data-new="${esc(p.path)}" title="Start a new Claude session here" aria-label="New session in ${esc(p.name)}">+</button>
       ${sparkSVG(p.activity.counts)}
     </div>
     <div class="meta">
       ${gitBadges(p.git, p.missing)}
-      ${costChip(p.spend7d, { cls: 'badge', after: '/7d' })}
+      ${costChip(p.spend7d, { cls: 'badge', after: ' in 7d' })}
       <span class="when" title="${esc(p.path)}">${relTime(p.lastActivityAt)}</span>
     </div>
     ${sessions}
@@ -1383,16 +1405,14 @@ function renderPinned(state) {
   const pins = state.pinned || [];
   el.hidden = !pins.length;
   if (!pins.length) { patch(el, ''); return; }
-  patch(el, `<div class="pin-label">Pinned</div>` + pins.map((p) => `
+  patch(el, `<div class="sec-head">Pinned <span class="n">${pins.length}</span></div>` + pins.map((p) => `
     <div class="pin-row">
       <span class="star">★</span>
-      <span class="s-title" data-session="${esc(p.sessionId)}" title="Click to read the transcript">${esc(p.title)}</span>${noteMark(p)}
-      ${modelChip(p.model)}
+      <span class="s-title" data-session="${esc(p.sessionId)}" title="${esc(titleTip(p.model))}">${esc(p.title)}</span>${noteMark(p)}
       ${changesChip(p)}
       <span class="s-when">${esc(p.projectName)}</span>
       <span class="s-when">${relTime(p.lastActivityAt)}</span>
-      ${renameBtn(p.sessionId, p.title)}
-      <button class="copy" data-pin="${esc(p.sessionId)}" title="Unpin">unpin</button>
+      <span class="acts">${renameBtn(p.sessionId, p.title)}<button class="copy" data-pin="${esc(p.sessionId)}" title="Unpin">unpin</button></span>
     </div>`).join(''));
 }
 
@@ -1420,7 +1440,7 @@ function renderGitAttention(state) {
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   el.hidden = false;
   patch(el,
-    `<span class="ga-label">Unpushed work — ${[items.length && plural(items.length, 'repo'), atRisk.length && plural(atRisk.length, 'worktree')].filter(Boolean).join(', ')}</span>` +
+    `<span class="ga-label">Unpushed work in ${[items.length && plural(items.length, 'repo'), atRisk.length && plural(atRisk.length, 'worktree')].filter(Boolean).join(', ')}</span>` +
     items.map((it) => `<span class="ga-item">${esc(it.name)}${
       it.changes ? `<span class="badge dirty" title="${it.changes} uncommitted/untracked files">●${it.changes}</span>` : ''}${
       it.ahead ? `<span class="badge ahead" title="${it.ahead} commits not pushed">↑${it.ahead}</span>` : ''}</span>`).join('') +
@@ -1469,14 +1489,13 @@ function digestItem(it) {
   return `<div class="digest-item">
     <div class="di-top">
       <span class="di-proj">${esc(it.project)}</span>
-      <span class="di-title" data-session="${esc(it.sessionId)}" title="Click to read the transcript">${it.worktree ? `<span class="wt mono">⎇</span> ` : ''}${esc(it.title)}</span>${noteMark(it)}
+      <span class="di-title" data-session="${esc(it.sessionId)}" title="${esc(titleTip(it.model))}">${it.worktree ? `<span class="wt mono">⎇</span> ` : ''}${esc(it.title)}</span>${noteMark(it)}
       ${job ? `<span class="badge bg" title="${BG_TIP}">BG</span>` : ''}
       ${running ? '<span class="flap disp st st-busy">running</span>' : ''}
-      ${modelChip(it.model)}
       ${changesChip(it)}
       ${costChip(it.estCost, { cls: 'di-when', assumed: it.assumed })}
       <span class="di-when">${time}</span>
-      ${openBtn(it.sessionId)}
+      <span class="acts">${openBtn(it.sessionId)}</span>
     </div>
     ${summary ? `<div class="di-summary" title="Click to expand">${esc(summary)}</div>` : ''}
     ${total ? `<div class="di-tasks"><span class="done">${t.completed}</span>/${total} tasks done${
@@ -1488,12 +1507,13 @@ function digestItem(it) {
 function renderDigest(state) {
   const items = digestEntries(state);
   const label = $('#digest-label');
-  label.textContent = `Digest — ${items.length} session${items.length === 1 ? '' : 's'}`;
+  label.textContent = 'Recent sessions';
+  $('#digest-n').textContent = items.length || '';
   for (const b of document.querySelectorAll('#digest-range button')) {
     b.classList.toggle('sel', Number(b.dataset.days) === digestDays);
   }
   if (!items.length) {
-    patch($('#digest-body'), `<div class="digest-empty">Quiet — no sessions in the last ${
+    patch($('#digest-body'), `<div class="digest-empty">No sessions in the last ${
       digestDays === 1 ? 'day' : digestDays + ' days'}.</div>`);
     return;
   }
@@ -1536,17 +1556,17 @@ function render(state) {
     : '';
   const b = state.budget;
   const budgetMeter = b
-    ? meter('budget', (b.spent / b.limit) * 100, `≈$${b.spent.toFixed(0)} of your $${b.limit} weekly budget (7-day estimate)`)
+    ? meter('Budget', (b.spent / b.limit) * 100, `≈$${b.spent.toFixed(0)} of your $${b.limit} weekly budget (7-day estimate)`)
     : '';
   const spendChip = planChip + (fmtCost(spend)
-    ? `${weeklyChart(state.weeklyCost)}${costChip(spend, { cls: '', before: '7d ' })}`
+    ? `<span class="q-spend">${weeklyChart(state.weeklyCost)}${costChip(spend, { cls: 'num' })}<span>in 7 days</span></span>`
     : '') + budgetMeter;
   if (q) {
     qEl.className = q.stale ? 'stale' : '';
     patch(qEl, spendChip +
-      (q.utilization != null ? forecastMeter('session', q.utilization, q.resetsAt, state.forecast && state.forecast.session) : '') +
-      (q.weeklyUtilization != null ? forecastMeter('week', q.weeklyUtilization, q.weeklyResetsAt, state.forecast && state.forecast.week) : '') +
-      (q.costUsed != null && q.costLimit ? `<span title="extra usage">$${q.costUsed.toFixed(0)}/$${q.costLimit.toFixed(0)}</span>` : ''));
+      (q.utilization != null ? forecastMeter('Session', q.utilization, q.resetsAt, state.forecast && state.forecast.session) : '') +
+      (q.weeklyUtilization != null ? forecastMeter('Week', q.weeklyUtilization, q.weeklyResetsAt, state.forecast && state.forecast.week) : '') +
+      (q.costUsed != null && q.costLimit ? `<span title="Extra usage spent this month, of your limit">Extra <span class="num" style="color:var(--ink)">$${q.costUsed.toFixed(0)}</span> of $${q.costLimit.toFixed(0)}</span>` : ''));
   } else {
     qEl.className = '';
     patch(qEl, spendChip);
@@ -1555,7 +1575,7 @@ function render(state) {
   // live rail
   const live = state.liveSessions || [];
   patch($('#live'),
-    `<div class="rail-label">Departures — ${live.length || 'none'} running</div>` +
+    `<div class="sec-head">Running now${live.length ? ` <span class="n">${live.length}</span>` : ''}</div>` +
     (live.length
       ? `<div class="rows">${live.map(liveCard).join('')}</div>`
       : `<div class="live-none">No sessions running. Start one with <code class="mono">claude</code> in any project.</div>`));
@@ -1583,7 +1603,10 @@ function render(state) {
       </div>`);
   const d = $('#dormant');
   d.hidden = dormant.length === 0;
-  $('summary', d).textContent = `Dormant — ${dormant.length} project${dormant.length === 1 ? '' : 's'}`;
+  patch($('summary', d), `<span class="sec-head"><span class="caret">▶</span>Dormant projects <span class="n">${dormant.length}</span></span>`);
+  const gh = $('#grid-head');
+  gh.hidden = !active.length;
+  $('.n', gh).textContent = active.length;
   patch($('.cards', d), dormant.map(projectCard).join(''));
 
   // tab title = attention signal
@@ -1618,6 +1641,7 @@ async function loadOpenPref() {
     const opts = [`<option value="terminal">${esc(c.resolvedTerminal.label)}</option>`];
     if (c.claudeApp) opts.push('<option value="app">Claude app</option>');
     prefEl.innerHTML = opts.join('');
+    $('#open-pref-wrap').hidden = opts.length < 2;
     const stored = localStorage.getItem('openTarget') || 'terminal';
     prefEl.value = stored === 'app' && !c.claudeApp ? 'terminal' : stored;
   } catch {
@@ -1830,14 +1854,12 @@ function renderDetail(d, name) {
   const sessions = d.sessions.length
     ? `<ul class="d-sessions">${d.sessions.map((s) => `
         <li>
-          <span class="s-title" data-session="${esc(s.sessionId)}" title="Click to read the transcript">${
+          <span class="s-title" data-session="${esc(s.sessionId)}" title="${esc(titleTip(s.model))}">${
             s.worktree ? `<span class="wt mono">⎇ ${esc(s.worktree)}</span> ` : ''}${esc(s.title)}</span>${noteMark(s)}
           ${changesChip(s)}
           ${costChip(s.estCost, { assumed: s.assumed })}
           <span class="s-when">${relTime(s.lastActivityAt)}</span>
-          ${renameBtn(s.sessionId, s.title)}
-          ${openBtn(s.sessionId)}
-          ${copyBtn(s.resumeCommand)}
+          <span class="acts">${renameBtn(s.sessionId, s.title)}${openBtn(s.sessionId)}${copyBtn(s.resumeCommand)}</span>
         </li>`).join('')}</ul>`
     : null;
   const caps = [...d.skills, ...d.agents.map((a) => ({ ...a, name: `agent: ${a.name}` })),

@@ -1,7 +1,7 @@
 {
   "name": "mission-control",
   "displayName": "Mission Control",
-  "version": "1.18.0",
+  "version": "1.19.0",
   "description": "Local, read-only dashboard for every Claude Code session: who needs you, what it costs, when you hit your limit.",
   "author": { "name": "Jon Imms", "url": "https://github.com/JonImmsWordpressDev" },
   "homepage": "https://github.com/JonImmsWordpressDev/claude-dashboard",
