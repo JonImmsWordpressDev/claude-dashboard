@@ -350,6 +350,17 @@
     }
     .sessions li:hover > .acts, .sessions li:focus-within > .acts { pointer-events: auto; }
   }
+  .hidden-note {
+    align-self: flex-start; margin: 6px 0 4px; padding: 2px 0;
+    border: none; background: none; cursor: pointer;
+    font: 12px var(--ui-font); color: var(--faint);
+  }
+  .hidden-note:hover { color: var(--accent); }
+  .hidden-note:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  .sessions + .hidden-note { border-top: 1px solid var(--line); align-self: stretch; text-align: left; padding-top: 8px; margin-top: 0; }
+  .d-noise { margin-top: 10px; }
+  .d-noise > summary { cursor: pointer; color: var(--faint); font-size: 12.5px; padding: 4px 0; }
+  .d-noise > summary:hover { color: var(--ink); }
   .card .new-btn { font-size: 16px; line-height: 1; padding: 2px 7px; color: var(--faint); }
   .card .new-btn:hover { color: var(--accent); }
 
@@ -1373,6 +1384,13 @@ function liveCard(s) {
   </div>`;
 }
 
+// "3 automated runs, 1 empty session" — the rows a card or drawer folds away.
+function hiddenLabel(h) {
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  return [h.automated && plural(h.automated, 'automated run'), h.empty && plural(h.empty, 'empty session')]
+    .filter(Boolean).join(', ');
+}
+
 function projectCard(p) {
   const sessions = p.sessions.length
     ? `<ul class="sessions">${p.sessions.map((sess) => `
@@ -1383,7 +1401,12 @@ function projectCard(p) {
           <span class="s-when">${relTime(sess.lastActivityAt)}</span>
           <span class="acts">${renameBtn(sess.sessionId, sess.title)}${openBtn(sess.sessionId)}${copyBtn(sess.resumeCommand)}</span>
         </li>`).join('')}</ul>`
-    : '<div class="none-yet">No sessions recorded.</div>';
+    : '';
+  const hiddenTxt = p.hidden ? hiddenLabel(p.hidden) : '';
+  const hiddenNote = hiddenTxt
+    ? `<button class="hidden-note" data-detail="${esc(p.path)}" data-detail-name="${esc(p.name)}" title="One-shot claude -p runs and sessions closed without a prompt. Open the project to see them.">${esc(hiddenTxt)} hidden</button>`
+    : '';
+  const empty = !p.sessions.length && !hiddenTxt ? '<div class="none-yet">No sessions recorded.</div>' : '';
   return `<div class="card">
     <div class="head">
       ${p.isLive ? '<span class="live-dot" title="session running"></span>' : ''}
@@ -1396,7 +1419,7 @@ function projectCard(p) {
       ${costChip(p.spend7d, { cls: 'badge', after: ' in 7d' })}
       <span class="when" title="${esc(p.path)}">${relTime(p.lastActivityAt)}</span>
     </div>
-    ${sessions}
+    ${sessions}${empty}${hiddenNote}
   </div>`;
 }
 
@@ -1591,7 +1614,8 @@ function render(state) {
   const now = Date.now();
   const active = [], dormant = [];
   for (const p of state.projects || []) {
-    const isDormant = !p.isLive && (!p.lastActivityAt || now - p.lastActivityAt > DORMANT_MS);
+    const noiseOnly = !p.sessions.length && p.hidden && (p.hidden.automated || p.hidden.empty);
+    const isDormant = !p.isLive && (noiseOnly || !p.lastActivityAt || now - p.lastActivityAt > DORMANT_MS);
     (isDormant ? dormant : active).push(p);
   }
   patch($('#grid'), active.length || dormant.length
@@ -1851,8 +1875,7 @@ function toolsetHtml(t, projectPath) {
 function renderDetail(d, name) {
   $('#d-title').textContent = name;
   $('#d-path').textContent = d.path;
-  const sessions = d.sessions.length
-    ? `<ul class="d-sessions">${d.sessions.map((s) => `
+  const sessionRow = (s) => `
         <li>
           <span class="s-title" data-session="${esc(s.sessionId)}" title="${esc(titleTip(s.model))}">${
             s.worktree ? `<span class="wt mono">⎇ ${esc(s.worktree)}</span> ` : ''}${esc(s.title)}</span>${noteMark(s)}
@@ -1860,7 +1883,16 @@ function renderDetail(d, name) {
           ${costChip(s.estCost, { assumed: s.assumed })}
           <span class="s-when">${relTime(s.lastActivityAt)}</span>
           <span class="acts">${renameBtn(s.sessionId, s.title)}${openBtn(s.sessionId)}${copyBtn(s.resumeCommand)}</span>
-        </li>`).join('')}</ul>`
+        </li>`;
+  const real = d.sessions.filter((s) => !s.kind);
+  const noise = d.sessions.filter((s) => s.kind);
+  const noiseTxt = hiddenLabel({
+    automated: noise.filter((s) => s.kind === 'automated').length,
+    empty: noise.filter((s) => s.kind === 'empty').length,
+  });
+  const sessions = d.sessions.length
+    ? (real.length ? `<ul class="d-sessions">${real.map(sessionRow).join('')}</ul>` : '') +
+      (noise.length ? `<details class="d-noise"><summary>${esc(noiseTxt)}</summary><ul class="d-sessions">${noise.map(sessionRow).join('')}</ul></details>` : '')
     : null;
   const caps = [...d.skills, ...d.agents.map((a) => ({ ...a, name: `agent: ${a.name}` })),
     ...d.commands.map((c) => ({ ...c, name: `/${c.name}` }))];
@@ -1897,7 +1929,7 @@ function renderDetail(d, name) {
   const tsOff = ts ? KINDS.reduce((n, k) => n + (ts[k] || []).filter((r) => !r.enabled).length, 0) : 0;
   $('#d-body').innerHTML =
     muteBtn +
-    dSection(`Sessions — ${d.sessions.length}`, sessions, 'No sessions recorded.') +
+    dSection(`Sessions — ${d.sessions.filter((s) => !s.kind).length}`, sessions, 'No sessions recorded.') +
     dSection(`What changed — last ${(d.commits || []).length} commits`, commitRows ? commitSummaryLine(d.commitSummary) + `<ul class="d-sessions">${commitRows}</ul>` : null, 'No git history here.') +
     dSection('CLAUDE.md', d.claudeMd.length ? dFiles(d.claudeMd, 'name') : null, 'No CLAUDE.md — sessions here start without project instructions.') +
     dSection(`Memory — ${d.memory.length} file${d.memory.length === 1 ? '' : 's'}`, d.memory.length ? dFiles(d.memory, 'name') : null, 'No memory yet.') +
@@ -3147,7 +3179,7 @@ document.addEventListener('click', async (e) => {
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-detail]');
-  if (el) openDetail(el.dataset.detail, el.textContent);
+  if (el) openDetail(el.dataset.detail, el.dataset.detailName || el.textContent);
 });
 $('#d-close').addEventListener('click', closeDetail);
 $('#drawer-backdrop').addEventListener('click', closeDetail);

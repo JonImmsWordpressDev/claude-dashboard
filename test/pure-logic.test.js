@@ -2422,3 +2422,27 @@ test('plugin version and pinned install commands match package.json', () => {
     for (const p of pins) assert.equal(p, `claude-mission-control@${version}`, f);
   }
 });
+
+// --- session noise: automated runs and empty sessions ---
+const { sessionKind } = require('../lib/transcripts');
+
+const used = { 'claude-opus-5-5': { input: 10, output: 5, cacheRead: 0, cacheWrite: 0 } };
+
+test('sessionKind marks claude -p runs as automated', () => {
+  assert.equal(sessionKind({ entrypoint: 'sdk-cli', usage: used }), 'automated');
+  assert.equal(sessionKind({ entrypoint: 'sdk-cli', usage: used }, true), 'automated');
+});
+
+test('sessionKind marks sessions that never called the model as empty, unless live', () => {
+  assert.equal(sessionKind({ entrypoint: 'cli', usage: {} }), 'empty');
+  assert.equal(sessionKind({ entrypoint: 'cli' }), 'empty');
+  assert.equal(sessionKind({ entrypoint: 'cli', usage: {} }, true), null);
+});
+
+test('sessionKind leaves real sessions alone, whatever app started them', () => {
+  assert.equal(sessionKind({ entrypoint: 'cli', usage: used }), null);
+  assert.equal(sessionKind({ entrypoint: 'claude-desktop', usage: used }), null);
+  assert.equal(sessionKind({ entrypoint: undefined, usage: used }), null);
+  // subagent work alone still counts as activity
+  assert.equal(sessionKind({ entrypoint: 'cli', usage: {}, subagentUsage: used }), null);
+});
