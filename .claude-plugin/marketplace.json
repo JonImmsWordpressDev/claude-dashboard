@@ -7,6 +7,11 @@
       "name": "mission-control",
       "source": "./plugin",
       "description": "Open the Mission Control dashboard for every Claude Code session on this machine, and add a statusline that shows sessions waiting on you and your limit forecast."
+    },
+    {
+      "name": "wp-blocks",
+      "source": { "source": "github", "repo": "JonImmsWordpressDev/claude-wp-blocks" },
+      "description": "Block-pattern rules for Claude Code, a check that catches broken pattern markup as Claude writes it, and a command to refresh a page from its pattern."
     }
   ]
 }
