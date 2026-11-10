@@ -4,6 +4,8 @@ One web page that shows you everything Claude Code is doing on your machine.
 
 **[Try the live demo →](https://jonimmswordpressdev.github.io/claude-dashboard/)** Click around with invented projects and sessions before you install anything.
 
+Built by [Jon Imms](https://jonimms.com/). Read the [project page](https://jonimms.com/claude-dashboard/) or [how it was built](https://jonimms.com/blog/claude-code-dashboard/).
+
 ![A session flips to NEEDS YOU on the board, a notification names the command waiting for permission, and one click opens the transcript at that request](docs/screenshots/demo.gif)
 
 Claude Code runs in a terminal. Once you have two or three sessions going, you lose track. Which one is waiting for an answer? What did that session change while you were away? How much has this week cost? Claude Mission Control answers those questions on one screen, updated live, from the files Claude Code already writes to `~/.claude`.
