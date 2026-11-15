@@ -9,7 +9,7 @@ const { Collector } = require('./lib/collector');
 const { openSession, openNewSession, revealTarget, revealFile } = require('./lib/opener');
 const { projectDetail } = require('./lib/detail');
 const { sessionTranscript } = require('./lib/transcript-view');
-const { searchHistory, searchTitles, searchNotes, searchTranscripts, parseSearchQuery } = require('./lib/search');
+const { searchHistory, searchTitles, searchNotes, searchTranscripts, parseSearchQuery, sessionFilterFor } = require('./lib/search');
 const { readChats, saveChats, searchChats } = require('./lib/chats');
 const { sessionTitle } = require('./lib/transcripts');
 const { friendlyName } = require('./lib/names');
@@ -476,8 +476,10 @@ const server = http.createServer((req, res) => {
       return;
     }
     const deep = new URL(req.url, 'http://localhost').searchParams.get('deep') === '1';
+    // m:/b:/file: describe Claude Code sessions; claude.ai chats have none of that.
+    const allowSession = sessionFilterFor(q, collector.raw.transcriptGroups);
     Promise.all([
-      searchHistory(q),
+      searchHistory(q, { allowSession }),
       deep ? searchTranscripts(q, collector.raw.transcriptGroups) : Promise.resolve(null),
     ])
       .then(([prompts, transcripts]) => {
@@ -488,7 +490,7 @@ const server = http.createServer((req, res) => {
         for (const r of notes) r.projectName = friendlyName(r.project);
         if (transcripts) for (const r of transcripts.matches) r.projectName = friendlyName(r.project);
         let chats = null;
-        if (deep) {
+        if (deep && !allowSession) {
           const { text, since } = parseSearchQuery(q);
           const pool = since ? readChats().filter((c) => c.updatedAt >= since) : readChats();
           chats = searchChats(text, pool);

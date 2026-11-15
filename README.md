@@ -137,6 +137,27 @@ Model, context use, your 5-hour limit, and this session's cost come from Claude 
 { "statusLine": { "type": "command", "command": "claude-dashboard statusline", "padding": 0 } }
 ```
 
+## MCP server: let Claude ask Mission Control
+
+`claude-dashboard mcp` is a read-only MCP server, so a Claude Code session can see what your other sessions are doing and search your past ones. Connect it once for every project:
+
+```bash
+claude mcp add --scope user mission-control -- claude-dashboard mcp
+```
+
+Then ask things like *"what did we decide about the contact form last week?"* or *"which sessions changed functions.php?"*. Four tools, none of which change anything:
+
+- `live_sessions`: what is running now, which sessions wait on you and why, cost, context.
+- `search_sessions`: the dashboard's search (prompts, titles, notes, transcripts) with the same filters.
+- `read_session`: the latest turns of one session.
+- `usage_summary`: 5-hour and weekly limits, when your pace runs out, this week's cost by project.
+
+It answers from the running dashboard on `127.0.0.1`, so start the dashboard first. It needs a global install (npm or Homebrew), not npx.
+
+## Search filters
+
+Search takes filters anywhere in the query: `project:<name>`, `since:7d` or `since:2026-11-01`, `m:<model>` (any model the session used), `b:<branch>` (the branch it started on), and `file:<name>` (a file it changed, from the same file history as the changes panel). A filter on its own, such as `file:functions.php`, lists every session that matches.
+
 ## Install (always-on)
 
 ```bash

@@ -26,6 +26,7 @@ There is no build, lint, or bundling step. Logs for the installed service: `~/Li
 - **The `/api/open` family executes shell commands.** Any change there (or in `lib/opener.js`) must validate inputs against collector-known state — session IDs, project paths — never trust client-supplied paths. The existing pattern: look the request up in `collector.projectPaths()` / `collector.findSession()` and use the server-side value.
 - Server binds `127.0.0.1` only by default; POST endpoints enforce same-origin.
 - **The phone view (`lib/remote.js`) is the only listener off `127.0.0.1`.** It is opt-in, binds a private LAN or Tailscale address only, and serves exactly `mobile.html`, the fonts, and `/m/state` (Bearer pairing key, constant-time compare, lockout after repeated failures). Keep it that way: never route `/api/*`, transcripts, paths or anything that runs a command through it, and keep `mobileState()` free of session ids, cwd and resume commands (a test enforces this).
+- **The MCP server (`lib/mcp.js`, `claude-dashboard mcp`) is read-only and opens no listener.** It speaks JSON-RPC over stdio and answers only from fixed loopback GETs to the running dashboard (`/api/state`, `/api/stats`, `/api/search`, `/api/session`). Never add a tool that writes, runs a command or reaches `/api/open`, and validate every argument before it goes into a path (session ids must be UUIDs). Its stdout carries protocol messages only.
 
 ## Architecture
 

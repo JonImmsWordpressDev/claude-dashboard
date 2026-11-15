@@ -6,8 +6,12 @@
 // and never auto-open).
 // `claude-dashboard statusline` prints one line for Claude Code's statusLine
 // setting instead of starting anything.
+// `claude-dashboard mcp` is a read-only MCP server over stdio for Claude Code
+// (`claude mcp add --scope user mission-control -- claude-dashboard mcp`).
 if (process.argv[2] === 'statusline') {
   require('../lib/statusline').runStatusline();
+} else if (process.argv[2] === 'mcp') {
+  require('../lib/mcp').runMcp();
 } else {
   if (!process.argv.includes('--no-open')) process.env.CLAUDE_DASH_OPEN = '1';
   require('../server.js');

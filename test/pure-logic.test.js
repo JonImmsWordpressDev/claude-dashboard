@@ -1097,7 +1097,7 @@ test('relPath strips the project root, leaves outside paths absolute', () => {
 
 test('backupPath confines reads to the session directory', () => {
   const p = backupPath('e84aac52-9396-4e16-9b0f-22e515c501e0', '6a2e7148c75ec392@v1');
-  assert.ok(p.endsWith('/file-history/e84aac52-9396-4e16-9b0f-22e515c501e0/6a2e7148c75ec392@v1'));
+  assert.ok(p.replace(/\\/g, '/').endsWith('/file-history/e84aac52-9396-4e16-9b0f-22e515c501e0/6a2e7148c75ec392@v1'));
   assert.equal(backupPath('../sessions', '6a2e7148c75ec392@v1'), null);
   assert.equal(backupPath('e84aac52-9396-4e16-9b0f-22e515c501e0', '../../settings.json'), null);
   assert.equal(backupPath('e84aac52-9396-4e16-9b0f-22e515c501e0', 'zz@v1'), null);
@@ -1142,6 +1142,12 @@ test('sessionFileDiff: v1 null backup with no `to` is a pure insert against disk
   assert.deepEqual(d.hunks[0].lines, [['+', 'a'], ['+', 'b']]);
   assert.equal(d.added, 2);
   assert.equal(d.removed, 0);
+});
+
+test('realPathOf: a Windows realParentDir gives a forward-slash key that relPath can shorten', () => {
+  const key = realPathOf('lib/config.js', { realParentDir: 'C:\\Users\\x\\repo\\lib' });
+  assert.equal(key, 'C:/Users/x/repo/lib/config.js');
+  assert.equal(relPath(key, 'C:/Users/x/repo'), 'lib/config.js');
 });
 
 test('realPathOf: joins realParentDir with the key basename', () => {
@@ -1838,7 +1844,8 @@ const { readScopes, collectCandidates, denyUnmatched } = require('../lib/toolset
 
 test('readScopes maps the four files to scopes, flags invalid JSON, treats missing as null', async () => {
   const seen = [];
-  const reader = async (abs) => {
+  const reader = async (raw) => {
+    const abs = raw.replace(/\\/g, '/'); // path.join uses backslashes on Windows
     seen.push(abs);
     if (abs.endsWith('managed-settings.json')) return 'missing';
     if (abs.endsWith('/.claude/settings.local.json')) return 'invalid';
@@ -1865,14 +1872,16 @@ test('readScopes survives a reader that throws', async () => {
 test('collectCandidates gathers project, user, and enabled-plugin agents and skills; tolerates failing listers', async () => {
   const calls = [];
   const listers = {
-    listAgents: async (dir) => {
+    listAgents: async (raw) => {
+      const dir = raw.replace(/\\/g, '/'); // path.join uses backslashes on Windows
       calls.push(dir);
       if (dir === '/p/.claude/agents') return [{ name: 'local-agent', description: 'd' }];
       if (dir.endsWith('/.claude/agents')) return [{ name: 'user-agent', description: null }];
       if (dir === '/plug/on/agents') return [{ name: 'plug-agent', description: null }];
       throw new Error('unreadable');
     },
-    listSkills: async (dir) => {
+    listSkills: async (raw) => {
+      const dir = raw.replace(/\\/g, '/');
       if (dir === '/p/.claude/skills') return [{ name: 'local-skill', description: null }];
       if (dir === '/plug/on/skills') return [{ name: 'plug-skill', description: null }];
       return [];
@@ -2565,4 +2574,282 @@ test('scanLine counts marker lines that fail to parse', () => {
   scanLine('not json and no marker', scan);
   assert.equal(scan.aiTitle, 'ok');
   assert.equal(scan.badLines, 2);
+});
+
+// --- Search filters: m: (model), b: (branch), file: (files changed) ---
+const searchMod = require('../lib/search');
+
+test('parseSearchQuery extracts m:, b: and file: filters, short and long forms', () => {
+  const p = parseSearchQuery('m:Opus b:feat/forms file:functions.php fix nav');
+  assert.equal(p.text, 'fix nav');
+  assert.equal(p.model, 'opus');
+  assert.equal(p.branch, 'feat/forms');
+  assert.equal(p.file, 'functions.php');
+  const l = parseSearchQuery('model:sonnet branch:main deploy');
+  assert.equal(l.model, 'sonnet');
+  assert.equal(l.branch, 'main');
+  assert.equal(l.text, 'deploy');
+});
+
+test('parseSearchQuery leaves m:, b:, file: null when absent and ignores them mid-word', () => {
+  const p = parseSearchQuery('team:alpha lib:x');
+  assert.strictEqual(p.model, null);
+  assert.strictEqual(p.branch, null);
+  assert.strictEqual(p.file, null);
+  assert.equal(p.text, 'team:alpha lib:x');
+});
+
+test('sessionMatchesFilters checks every model used, the branch and changed file paths', () => {
+  const { sessionMatchesFilters } = searchMod;
+  const meta = {
+    model: 'claude-sonnet-5-5',
+    usage: { 'claude-opus-5-5': {}, 'claude-sonnet-5-5': {} },
+    gitBranch: 'feat/contact-form',
+    changes: { '/r/site/wp-content/themes/x/functions.php': {}, '/r/site/style.scss': {} },
+  };
+  assert.equal(sessionMatchesFilters(meta, { model: null, branch: null, file: null }), true);
+  assert.equal(sessionMatchesFilters(meta, { model: 'opus' }), true);
+  assert.equal(sessionMatchesFilters(meta, { model: 'haiku' }), false);
+  assert.equal(sessionMatchesFilters(meta, { branch: 'contact' }), true);
+  assert.equal(sessionMatchesFilters(meta, { branch: 'main' }), false);
+  assert.equal(sessionMatchesFilters(meta, { file: 'functions.php' }), true);
+  assert.equal(sessionMatchesFilters(meta, { file: 'header.php' }), false);
+  assert.equal(sessionMatchesFilters(meta, { model: 'opus', file: 'header.php' }), false);
+});
+
+test('sessionMatchesFilters fails a filter the session has no data for', () => {
+  const { sessionMatchesFilters } = searchMod;
+  assert.equal(sessionMatchesFilters({}, { model: 'opus' }), false);
+  assert.equal(sessionMatchesFilters({ gitBranch: null }, { branch: 'main' }), false);
+  assert.equal(sessionMatchesFilters({ changes: null }, { file: 'a.php' }), false);
+});
+
+const filterGroups = () => new Map([
+  ['/r/site', {
+    path: '/r/site',
+    sessions: [
+      { sessionId: 's1', lastActivityAt: 3000, gitBranch: 'main', model: 'claude-opus-5-5', changes: { '/r/site/functions.php': {} } },
+      { sessionId: 's2', lastActivityAt: 2000, gitBranch: 'feat/forms', model: 'claude-sonnet-5-5', changes: null },
+    ],
+  }],
+]);
+
+test('searchTitles applies b:, m: and file:, and a filter-only query lists matching sessions', () => {
+  const title = (m) => ({ title: `Fix nav ${m.sessionId}` });
+  const ids = (q) => searchMod.searchTitles(q, filterGroups(), title).map((r) => r.sessionId);
+  assert.deepEqual(ids('fix'), ['s1', 's2']);
+  assert.deepEqual(ids('fix b:forms'), ['s2']);
+  assert.deepEqual(ids('fix m:opus'), ['s1']);
+  assert.deepEqual(ids('file:functions.php'), ['s1']);
+});
+
+test('searchNotes applies the session filters', () => {
+  const notes = { s1: 'stripe webhook', s2: 'stripe keys' };
+  assert.deepEqual(searchMod.searchNotes('stripe m:sonnet', filterGroups(), notes).map((r) => r.sessionId), ['s2']);
+});
+
+test('sessionFilterFor is null without session filters, else a sessionId predicate', () => {
+  const { sessionFilterFor } = searchMod;
+  assert.equal(sessionFilterFor('deploy project:site', filterGroups()), null);
+  const f = sessionFilterFor('deploy b:main', filterGroups());
+  assert.equal(f('s1'), true);
+  assert.equal(f('s2'), false);
+  assert.equal(f('unknown'), false);
+  assert.equal(f(null), false);
+});
+
+test('searchHistory keeps only prompts from allowed sessions when given a filter', async () => {
+  const fsx = require('fs');
+  const osx = require('os');
+  const dir = fsx.mkdtempSync(require('path').join(osx.tmpdir(), 'cd-hist-'));
+  const file = require('path').join(dir, 'history.jsonl');
+  fsx.writeFileSync(file, [
+    JSON.stringify({ display: 'deploy the site', project: '/r/site', timestamp: 1, sessionId: 's1' }),
+    JSON.stringify({ display: 'deploy again', project: '/r/site', timestamp: 2, sessionId: 's2' }),
+    JSON.stringify({ display: 'deploy, no session', project: '/r/site', timestamp: 3 }),
+  ].join('\n') + '\n');
+  const all = await searchMod.searchHistory('deploy', { file });
+  assert.equal(all.length, 3);
+  const only = await searchMod.searchHistory('deploy', { file, allowSession: (id) => id === 's1' });
+  assert.deepEqual(only.map((r) => r.sessionId), ['s1']);
+  // Windows may still hold the read stream's handle a moment after the search
+  // resolves; rmSync's retries cover EBUSY/ENOTEMPTY there.
+  fsx.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+});
+
+test('searchTranscripts skips sessions the filters exclude', async () => {
+  const fsx = require('fs');
+  const osx = require('os');
+  const p = require('path');
+  const dir = fsx.mkdtempSync(p.join(osx.tmpdir(), 'cd-tx-'));
+  const line = JSON.stringify({ type: 'user', message: { content: 'the flaky test again' }, timestamp: '2026-11-01T00:00:00Z' });
+  const groups = filterGroups();
+  for (const m of groups.get('/r/site').sessions) {
+    m.file = p.join(dir, `${m.sessionId}.jsonl`);
+    fsx.writeFileSync(m.file, line + '\n');
+  }
+  const r = await searchMod.searchTranscripts('flaky b:forms', groups);
+  assert.deepEqual(r.matches.map((x) => x.sessionId), ['s2']);
+  assert.equal(r.total, 1);
+  // Windows may still hold the read stream's handle a moment after the search
+  // resolves; rmSync's retries cover EBUSY/ENOTEMPTY there.
+  fsx.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+});
+
+// --- MCP server (lib/mcp.js): JSON-RPC over stdio, read-only tools ---
+const { createMcpHandler, MCP_TOOLS } = require('../lib/mcp');
+
+// Fake dashboard: maps request paths to canned JSON, records what was asked.
+function fakeDash(routes) {
+  const asked = [];
+  const get = async (p) => {
+    asked.push(p);
+    const key = Object.keys(routes).find((k) => p === k || p.startsWith(k + '?'));
+    if (!key) throw Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+    return routes[key];
+  };
+  return { get, asked };
+}
+const call = (h, name, args = {}, id = 7) => h({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
+const payload = (res) => JSON.parse(res.result.content[0].text);
+
+test('mcp initialize names the server and offers tools, echoing a supported protocol version', async () => {
+  const h = createMcpHandler(fakeDash({}));
+  const res = await h({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude-code' } } });
+  assert.equal(res.id, 1);
+  assert.equal(res.result.protocolVersion, '2025-06-18');
+  assert.equal(res.result.serverInfo.name, 'mission-control');
+  assert.ok(res.result.capabilities.tools);
+});
+
+test('mcp initialize answers an unknown protocol version with its own latest', async () => {
+  const h = createMcpHandler(fakeDash({}));
+  const res = await h({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '1999-01-01' } });
+  assert.notEqual(res.result.protocolVersion, '1999-01-01');
+});
+
+test('mcp notifications get no reply, ping gets an empty result, unknown methods -32601', async () => {
+  const h = createMcpHandler(fakeDash({}));
+  assert.equal(await h({ jsonrpc: '2.0', method: 'notifications/initialized' }), null);
+  assert.deepEqual((await h({ jsonrpc: '2.0', id: 2, method: 'ping' })).result, {});
+  assert.equal((await h({ jsonrpc: '2.0', id: 3, method: 'resources/write' })).error.code, -32601);
+});
+
+test('mcp tools/list offers exactly the four read-only tools, each with an input schema', async () => {
+  const h = createMcpHandler(fakeDash({}));
+  const res = await h({ jsonrpc: '2.0', id: 4, method: 'tools/list' });
+  assert.deepEqual(res.result.tools.map((t) => t.name).sort(), ['live_sessions', 'read_session', 'search_sessions', 'usage_summary']);
+  for (const t of res.result.tools) {
+    assert.equal(t.inputSchema.type, 'object');
+    assert.equal(t.annotations.readOnlyHint, true);
+  }
+  assert.equal(MCP_TOOLS.length, 4);
+});
+
+test('mcp unknown tool is a -32602 error', async () => {
+  const h = createMcpHandler(fakeDash({}));
+  assert.equal((await call(h, 'open_terminal')).error.code, -32602);
+});
+
+test('mcp live_sessions lists waiting sessions first, without resume commands or pids', async () => {
+  const state = {
+    liveSessions: [
+      { sessionId: 'a', pid: 1, projectName: 'site', title: 'Fix nav', status: 'busy', model: 'claude-opus-5-5', estCost: 1.6, burnRate: 3.2, context: { pct: 14 }, lastAction: { verb: 'running', target: 'npm test' }, startedAt: Date.parse('2026-11-15T10:00:00Z'), resumeCommand: "cd '/x' && claude --resume a" },
+      { sessionId: 'b', pid: 2, projectName: 'shop', title: 'Stripe', status: 'waiting', waitingFor: 'permission', waitingReason: 'Bash: rm -rf build', model: 'claude-sonnet-5-5', estCost: 0.4, context: { pct: 80 }, startedAt: Date.parse('2026-11-15T09:00:00Z') },
+    ],
+  };
+  const h = createMcpHandler(fakeDash({ '/api/state': state }));
+  const out = payload(await call(h, 'live_sessions'));
+  assert.deepEqual(out.sessions.map((s) => s.sessionId), ['b', 'a']);
+  assert.equal(out.sessions[0].needsYou, true);
+  assert.equal(out.sessions[0].waitingReason, 'Bash: rm -rf build');
+  assert.equal(out.sessions[1].contextPct, 14);
+  assert.equal(out.sessions[1].lastAction, 'running npm test');
+  assert.equal(out.sessions[1].startedAt, '2026-11-15T10:00:00.000Z');
+  const raw = JSON.stringify(out);
+  assert.ok(!raw.includes('resume') && !raw.includes('"pid"'));
+});
+
+test('mcp search_sessions passes the query encoded, deep by default, and shapes the matches', async () => {
+  const dash = fakeDash({ '/api/search': {
+    prompts: [{ snippet: 'deploy the site', projectName: 'site', timestamp: Date.parse('2026-11-01T00:00:00Z'), sessionId: 's1' }],
+    titles: [{ title: 'Deploy', projectName: 'site', sessionId: 's1', lastActivityAt: Date.parse('2026-11-02T00:00:00Z') }],
+    notes: [],
+    transcripts: { matches: [{ role: 'claude', text: 'deployed', ts: null, sessionId: 's1', projectName: 'site' }], scanned: 3, total: 3, complete: true },
+    chats: [{ title: 'should not appear' }],
+  } });
+  const h = createMcpHandler(dash);
+  const out = payload(await call(h, 'search_sessions', { query: 'deploy b:main' }));
+  assert.equal(dash.asked[0], '/api/search?q=deploy%20b%3Amain&deep=1');
+  assert.deepEqual(out.prompts[0], { project: 'site', sessionId: 's1', at: '2026-11-01T00:00:00.000Z', text: 'deploy the site' });
+  assert.equal(out.titles[0].title, 'Deploy');
+  assert.equal(out.transcripts.matches[0].text, 'deployed');
+  assert.equal(out.transcripts.complete, true);
+  assert.equal(out.chats, undefined);
+});
+
+test('mcp search_sessions rejects a missing or too-short query without calling the dashboard', async () => {
+  const dash = fakeDash({});
+  const h = createMcpHandler(dash);
+  const res = await call(h, 'search_sessions', { query: 'x' });
+  assert.equal(res.result.isError, true);
+  assert.equal(dash.asked.length, 0);
+});
+
+test('mcp read_session returns the last N turns and rejects ids that are not session ids', async () => {
+  const events = Array.from({ length: 50 }, (_, i) => ({ kind: i % 2 ? 'assistant' : 'user', text: `turn ${i}`, ts: null }));
+  events.push({ kind: 'tool', name: 'Bash', input: 'npm test', ts: null });
+  const dash = fakeDash({ '/api/session': { sessionId: '58ec9cab-e791-4580-8d21-71d4252b2f91', title: 'Atuin', projectName: '.gaffer', note: null, changeCount: 2, events, truncatedTurns: 0 } });
+  const h = createMcpHandler(dash);
+  const out = payload(await call(h, 'read_session', { sessionId: '58ec9cab-e791-4580-8d21-71d4252b2f91', last: 3 }));
+  assert.equal(dash.asked[0], '/api/session?id=58ec9cab-e791-4580-8d21-71d4252b2f91');
+  assert.equal(out.events.length, 3);
+  assert.deepEqual(out.events[2], { kind: 'tool', at: null, tool: 'Bash', input: 'npm test' });
+  assert.equal(out.earlierTurnsOmitted, 48);
+  const bad = await call(h, 'read_session', { sessionId: '../../etc/passwd' });
+  assert.equal(bad.result.isError, true);
+  assert.equal(dash.asked.length, 1);
+});
+
+test('mcp usage_summary combines limits, forecast and the week', async () => {
+  const state = {
+    quota: { utilization: 15, weeklyUtilization: 2, resetsAt: '2026-11-15T19:39:59Z', weeklyResetsAt: '2026-11-20T20:59:59Z', source: 'api' },
+    forecast: { session: { hitAt: Date.parse('2026-11-15T18:05:00Z') }, week: { hitAt: null } },
+  };
+  const stats = { week: { sessions: 20, prompts: 93, cost: 194.38, projects: [{ name: 'site', cost: 128.24 }] }, totals: { sessions: 61, prompts: 3075, cost: 869.93 }, topSessions: [] };
+  const h = createMcpHandler(fakeDash({ '/api/state': state, '/api/stats': stats }));
+  const out = payload(await call(h, 'usage_summary'));
+  assert.equal(out.limits.fiveHourPct, 15);
+  assert.equal(out.limits.fiveHourRunsOutAt, '2026-11-15T18:05:00.000Z');
+  assert.equal(out.limits.weekRunsOutAt, null);
+  assert.equal(out.week.cost, 194.38);
+  assert.equal(out.allTime.sessions, 61);
+});
+
+test('mcp tool call says how to start the dashboard when it is not running', async () => {
+  const h = createMcpHandler(fakeDash({}));
+  const res = await call(h, 'live_sessions');
+  assert.equal(res.result.isError, true);
+  assert.match(res.result.content[0].text, /isn't running/);
+});
+
+test('mcp stdio answers every request before exiting when stdin closes', () => {
+  const { spawnSync } = require('child_process');
+  const p = require('path');
+  const r = spawnSync(process.execPath, [p.join(__dirname, '..', 'bin', 'claude-dashboard.js'), 'mcp'], {
+    input: '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"live_sessions","arguments":{}}}\n',
+    env: { ...process.env, CLAUDE_DASH_PORT: '1' }, // nothing listens on port 1
+    encoding: 'utf8',
+    timeout: 10000,
+  });
+  const reply = JSON.parse(r.stdout.trim());
+  assert.equal(reply.id, 9);
+  assert.equal(reply.result.isError, true);
+});
+
+test('mcp search_sessions says which filters it applied, so a filter-only match is explained', async () => {
+  const h = createMcpHandler(fakeDash({ '/api/search': { prompts: [], titles: [], notes: [], transcripts: null } }));
+  const out = payload(await call(h, 'search_sessions', { query: 'file:functions.php b:main', deep: false }));
+  assert.deepEqual(out.filters, { file: 'functions.php', branch: 'main' });
+  assert.equal(out.matchedText, null);
 });

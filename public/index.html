@@ -2730,7 +2730,7 @@ async function runSearch(q, deep) {
           deepRows ? `<ul class="d-sessions">${deepRows}</ul>` : null, 'No matches inside transcripts.')
       : `<div style="margin:14px 0"><button class="copy" data-deep-search="${esc(q)}">search inside full transcripts →</button>
          <span class="s-when" style="margin-left:8px">reads every conversation, not just your prompts</span></div>`;
-    $('#d-path').textContent = `${d.prompts.length + d.titles.length + (t ? t.matches.length : 0) + (d.notes || []).length} results — narrow with project:name or since:7d`;
+    $('#d-path').textContent = `${d.prompts.length + d.titles.length + (t ? t.matches.length : 0) + (d.notes || []).length} results — narrow with project:name, since:7d, m:opus, b:branch or file:name`;
     const titleRows = d.titles.map((t) => `
       <li>
         <span class="s-title" data-session="${esc(t.sessionId)}" title="Click to read the transcript">${esc(t.title)}</span>
