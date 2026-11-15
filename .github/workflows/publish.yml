@@ -1,0 +1,34 @@
+name: Publish to npm
+
+# Trusted publishing (OIDC): npm trusts this workflow in the public repo, so
+# no token or one-time password is needed. Configured on npmjs.com under
+# claude-mission-control → Settings → Trusted publishing (workflow: publish.yml).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm >= 11.5.1.
+      - run: npm install -g npm@latest
+      - run: npm test
+      - name: Publish (skipped if this version is already on npm)
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if npm view "claude-mission-control@$v" version >/dev/null 2>&1; then
+            echo "claude-mission-control@$v is already on npm"
+            exit 0
+          fi
+          npm publish
