@@ -4,6 +4,8 @@
 set -euo pipefail
 MSG="${1:-Update}"
 PUBLIC_REPO="git@github.com:JonImmsWordpressDev/claude-dashboard.git"
+# Never publish a release that fails its own tests.
+(cd "$(dirname "$0")" && npm test --silent) || { echo "✗ tests failed — not publishing"; exit 1; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 git -C "$(dirname "$0")" archive HEAD | tar -x -C "$TMP"

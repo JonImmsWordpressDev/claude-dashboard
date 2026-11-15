@@ -4,8 +4,6 @@ One web page that shows you everything Claude Code is doing on your machine.
 
 **[Try the live demo →](https://jonimmswordpressdev.github.io/claude-dashboard/)** Click around with invented projects and sessions before you install anything.
 
-Built by [Jon Imms](https://jonimms.com/). Read the [project page](https://jonimms.com/claude-dashboard/) or [how it was built](https://jonimms.com/blog/claude-code-dashboard/).
-
 ![A session flips to NEEDS YOU on the board, a notification names the command waiting for permission, and one click opens the transcript at that request](docs/screenshots/demo.gif)
 
 Claude Code runs in a terminal. Once you have two or three sessions going, you lose track. Which one is waiting for an answer? What did that session change while you were away? How much has this week cost? Claude Mission Control answers those questions on one screen, updated live, from the files Claude Code already writes to `~/.claude`.
@@ -313,7 +311,8 @@ Edit `ignore.json` — an array of absolute path prefixes. A project is hidden i
 | `CLAUDE_DASH_HOST` | `127.0.0.1` | Bind address — see below before changing |
 | `CLAUDE_DASH_DEMO` | unset | `1` = serve believable fake data (screenshots, trying it without Claude history) |
 | `CLAUDE_DASH_OPEN` | unset | `1` = open the browser on startup (what `npx` sets for you) |
-| `CLAUDE_DASH_CONFIG_DIR` | repo dir | Where config.json/names.json/ignore.json live (auto-falls back to `~/.config/claude-dashboard`) |
+| `CLAUDE_DASH_CONFIG_DIR` | repo dir (git checkout) | Where config.json/names.json/ignore.json/chats.json live. Non-git installs (npm, npx) use `~/.config/claude-dashboard`; files from older versions are copied there on first run |
+| `CLAUDE_DASH_ALLOWED_HOSTS` | — | Comma-separated extra hostnames accepted in the Host header, e.g. your MagicDNS name behind `tailscale serve`. Anything else gets 403 (DNS-rebinding protection) |
 
 The server binds to `127.0.0.1` only by default.
 
@@ -380,4 +379,4 @@ Every `/api/*` route serves invented data from `lib/demo.js` instead of reading 
 
 ## Credits
 
-Built by [Jon Imms](https://jonimms.com) — WordPress and Gutenberg developer writing about AI-assisted development — pair-programmed with [Claude Code](https://claude.com/claude-code). See the [project page](https://jonimms.com/claude-dashboard/). The story of how it was built is in [the launch post](https://jonimms.com/blog/claude-code-dashboard/). MIT licensed; issues and PRs welcome.
+Built by [Jon Imms](https://jonimms.com) — WordPress and Gutenberg developer writing about AI-assisted development — pair-programmed with [Claude Code](https://claude.com/claude-code). The story of how it was built is in [the launch post](https://jonimms.com/blog/claude-code-dashboard/). MIT licensed; issues and PRs welcome.

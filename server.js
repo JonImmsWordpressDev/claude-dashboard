@@ -43,15 +43,17 @@ function indexHtml() {
   return indexCache;
 }
 
+const guard = require('./lib/guard');
+// Extra names to accept in the Host header when bound off-loopback (e.g. a
+// Tailscale MagicDNS name). Comma-separated.
+const ALLOWED_HOSTS = guard.parseAllowedHosts(process.env.CLAUDE_DASH_ALLOWED_HOSTS);
+
 function allowedHost(req) {
-  if (HOST !== '127.0.0.1') return true; // explicitly opted into remote access
-  const h = String(req.headers.host || '');
-  return h.startsWith('127.0.0.1') || h.startsWith('localhost');
+  return guard.allowedHost(req.headers.host, HOST, ALLOWED_HOSTS);
 }
 
 function sameOrigin(req) {
-  const origin = req.headers.origin;
-  return !origin || /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin) || HOST !== '127.0.0.1';
+  return guard.sameOrigin(req.headers.origin, req.headers.host);
 }
 
 function readBody(req, res, cb) {
@@ -503,8 +505,7 @@ const server = http.createServer((req, res) => {
 
   if (url === '/api/open' && req.method === 'POST') {
     // Same-origin only: browsers always send Origin on cross-origin POSTs.
-    const origin = req.headers.origin;
-    if (origin && !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) {
+    if (!sameOrigin(req)) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end('{"ok":false,"error":"forbidden"}');
       return;

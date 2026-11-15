@@ -1,0 +1,36 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [18, 22]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test
+      # Boot the real server in demo mode and hit it, so a broken require or
+      # router change fails CI, not a user's launchd service.
+      - name: Smoke test
+        shell: bash
+        env:
+          CLAUDE_DASH_DEMO: '1'
+          CLAUDE_DASH_PORT: '4599'
+        run: |
+          node server.js &
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:4599/api/health && break; sleep 0.5; done
+          curl -sf http://127.0.0.1:4599/ > /dev/null
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: localhost.evil.example:4599' http://127.0.0.1:4599/api/state)
+          test "$code" = 403

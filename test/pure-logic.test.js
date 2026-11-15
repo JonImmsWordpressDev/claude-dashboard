@@ -2483,3 +2483,86 @@ test('sessionTitle tidies prompt-derived titles but not AI or custom ones', () =
   assert.equal(sessionTitle({ ...meta, aiTitle: 'In the repo, do X' }).title, 'In the repo, do X');
   assert.equal(sessionTitle({ ...meta, firstUserPrompt: 'x'.repeat(300) }).title.length, 120);
 });
+
+// ---------- request guards (DNS rebinding / cross-origin POST) ----------
+const guard = require('../lib/guard');
+
+test('allowedHost: exact loopback names only on a loopback bind', () => {
+  for (const h of ['127.0.0.1:4517', 'localhost:4517', 'LOCALHOST', '[::1]:4517', 'localhost']) {
+    assert.equal(guard.allowedHost(h, '127.0.0.1'), true, h);
+  }
+  // The old prefix check let all of these through.
+  for (const h of ['localhost.evil.example:4517', '127.0.0.1.evil.example', 'localhostx', 'evil.example', '', undefined, '[::1']) {
+    assert.equal(guard.allowedHost(h, '127.0.0.1'), false, String(h));
+  }
+});
+
+test('allowedHost: listed names and the bind address are accepted', () => {
+  assert.equal(guard.allowedHost('mac.tail1234.ts.net', '127.0.0.1', ['mac.tail1234.ts.net']), true); // tailscale serve
+  assert.equal(guard.allowedHost('100.70.1.2:4517', '100.70.1.2'), true);
+  assert.equal(guard.allowedHost('evil.example', '100.70.1.2'), false); // opting into remote no longer disables the check
+  assert.equal(guard.allowedHost('0.0.0.0', '0.0.0.0'), false); // wildcard bind adds nothing
+  assert.deepEqual(guard.parseAllowedHosts(' a.ts.net, ,b '), ['a.ts.net', 'b']);
+});
+
+test('sameOrigin: Origin must name exactly the requested host', () => {
+  assert.equal(guard.sameOrigin(undefined, 'localhost:4517'), true); // curl, no Origin
+  assert.equal(guard.sameOrigin('http://localhost:4517', 'localhost:4517'), true);
+  assert.equal(guard.sameOrigin('http://localhost:4517', 'LocalHost:4517'), true);
+  assert.equal(guard.sameOrigin('http://localhost:9999', 'localhost:4517'), false); // another local app
+  assert.equal(guard.sameOrigin('http://evil.example', '100.70.1.2:4517'), false);
+  assert.equal(guard.sameOrigin('null', 'localhost:4517'), false); // sandboxed iframe
+  assert.equal(guard.sameOrigin('file://', 'localhost:4517'), false);
+});
+
+// ---------- user-data storage ----------
+test('chooseConfigDir: only a git checkout keeps data beside the code', () => {
+  const { chooseConfigDir } = require('../lib/config');
+  const base = { root: '/pkg', home: '/home/u' };
+  assert.deepEqual(chooseConfigDir({ ...base, env: '/x', rootIsGit: true, rootWritable: true }), { dir: '/x', migrateFrom: null });
+  assert.deepEqual(chooseConfigDir({ ...base, rootIsGit: true, rootWritable: true }), { dir: '/pkg', migrateFrom: null });
+  const npmGlobal = chooseConfigDir({ ...base, rootIsGit: false, rootWritable: true }); // the case that lost data
+  assert.equal(npmGlobal.dir, require('path').join('/home/u', '.config', 'claude-dashboard'));
+  assert.equal(npmGlobal.migrateFrom, '/pkg');
+});
+
+test('writeJson is atomic and readJsonForWrite refuses to clobber a corrupt file', () => {
+  const { writeJson, readJsonForWrite } = require('../lib/config');
+  const dir = fsSync.mkdtempSync(pathMod.join(osMod.tmpdir(), 'cdash-'));
+  const f = pathMod.join(dir, 'config.json');
+  assert.deepEqual(readJsonForWrite(f, { fresh: true }), { fresh: true }); // missing = fresh start
+  writeJson(f, { a: 1 });
+  assert.deepEqual(readJsonForWrite(f, {}), { a: 1 });
+  assert.deepEqual(fsSync.readdirSync(dir), ['config.json']); // no temp file left behind
+  fsSync.writeFileSync(f, '{"sessionNotes": {"x": "trunc');
+  assert.throws(() => readJsonForWrite(f, {}), /config\.json is not valid JSON/);
+  fsSync.rmSync(dir, { recursive: true });
+});
+
+// ---------- scanner health ----------
+test('scannerHealth flags format drift and unparseable lines, not normal scans', () => {
+  const { scannerHealth } = require('../lib/transcripts');
+  const now = Date.UTC(2026, 10, 14);
+  const s = (o) => ({ lastActivityAt: now - 3600000, size: 200000, entrypoint: 'cli', usage: { m: {} }, badLines: 0, ...o });
+  assert.deepEqual(scannerHealth([s(), s(), s()], now), []);
+  const drift = scannerHealth([s({ usage: {} }), s({ usage: {} }), s({ usage: {} })], now);
+  assert.equal(drift.length, 1);
+  assert.match(drift[0], /format may have changed/);
+  // Too few, too small, too old, or automated: not evidence of drift.
+  assert.deepEqual(scannerHealth([s({ usage: {} }), s({ usage: {} })], now), []);
+  assert.deepEqual(scannerHealth([s({ usage: {} }), s({ usage: {} }), s({ usage: {}, size: 100 })], now), []);
+  assert.deepEqual(scannerHealth([1, 2, 3].map(() => s({ usage: {}, entrypoint: 'sdk-cli' })), now), []);
+  assert.deepEqual(scannerHealth([1, 2, 3].map(() => s({ usage: {}, lastActivityAt: now - 30 * 86400000 })), now), []);
+  assert.match(scannerHealth([s({ badLines: 5 })], now)[0], /5 transcript lines could not be parsed/);
+});
+
+test('scanLine counts marker lines that fail to parse', () => {
+  const { scanLine } = require('../lib/transcripts');
+  const scan = { usage: {}, days: {} };
+  scanLine('{"type":"ai-title","aiTitle":"ok"}', scan);
+  scanLine('{"type":"ai-title", broken', scan);
+  scanLine('{"type":"assistant","message":{"usage": nope', scan);
+  scanLine('not json and no marker', scan);
+  assert.equal(scan.aiTitle, 'ok');
+  assert.equal(scan.badLines, 2);
+});
