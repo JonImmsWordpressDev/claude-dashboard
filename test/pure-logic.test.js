@@ -2853,3 +2853,61 @@ test('mcp search_sessions says which filters it applied, so a filter-only match 
   assert.deepEqual(out.filters, { file: 'functions.php', branch: 'main' });
   assert.equal(out.matchedText, null);
 });
+
+const { parseDigestTime, endOfDayDue, endOfDaySummary, localDay } = require('../lib/notify');
+
+test('parseDigestTime: accepts 24-hour HH:MM, rejects the rest', () => {
+  assert.equal(parseDigestTime('18:00'), 1080);
+  assert.equal(parseDigestTime('7:05'), 425);
+  assert.equal(parseDigestTime(' 23:59 '), 1439);
+  for (const bad of ['', null, undefined, '24:00', '18:60', '6pm', '18', 1800]) {
+    assert.equal(parseDigestTime(bad), null, String(bad));
+  }
+});
+
+test('endOfDayDue: off without a valid time', () => {
+  const now = new Date(2026, 10, 22, 19, 0).getTime();
+  assert.equal(endOfDayDue(now, '', null, 0), false);
+  assert.equal(endOfDayDue(now, 'nope', null, 0), false);
+});
+
+test('endOfDayDue: fires at or after the time, once per day', () => {
+  const started = new Date(2026, 10, 22, 9, 0).getTime();
+  const before = new Date(2026, 10, 22, 17, 59).getTime();
+  const at = new Date(2026, 10, 22, 18, 0).getTime();
+  const later = new Date(2026, 10, 22, 21, 0).getTime();
+  assert.equal(endOfDayDue(before, '18:00', null, started), false);
+  assert.equal(endOfDayDue(at, '18:00', null, started), true);
+  assert.equal(endOfDayDue(later, '18:00', localDay(at), started), false);
+  const tomorrow = new Date(2026, 10, 23, 18, 1).getTime();
+  assert.equal(endOfDayDue(tomorrow, '18:00', localDay(at), started), true);
+});
+
+test('endOfDayDue: a restart after the time waits for tomorrow', () => {
+  const restarted = new Date(2026, 10, 22, 18, 30).getTime();
+  const now = new Date(2026, 10, 22, 18, 31).getTime();
+  assert.equal(endOfDayDue(now, '18:00', null, restarted), false);
+  const tomorrow = new Date(2026, 10, 23, 18, 0).getTime();
+  assert.equal(endOfDayDue(tomorrow, '18:00', null, restarted), true);
+});
+
+test('endOfDaySummary: null on a quiet day', () => {
+  assert.equal(endOfDaySummary({ sessions: 0, cost: 0, waiting: [], unpushed: [] }), null);
+});
+
+test('endOfDaySummary: sessions, cost, waiting and unpushed', () => {
+  const m = endOfDaySummary({
+    sessions: 4,
+    cost: 12.3,
+    waiting: ['gaffer'],
+    unpushed: [{ name: 'strataWP', ahead: 2, changes: 0 }, { name: 'blog', ahead: 0, changes: 3 }],
+  });
+  assert.equal(m.title, 'Claude: end of day');
+  assert.equal(m.body, '4 sessions today, about $12.30. Still needs you: gaffer. Unpushed work: strataWP (2 unpushed), blog (3 uncommitted).');
+});
+
+test('endOfDaySummary: singular session, no cost, long lists truncated', () => {
+  const m = endOfDaySummary({ sessions: 1, cost: 0, waiting: ['a', 'b', 'c', 'd', 'e'] });
+  assert.equal(m.body, '1 session today. Still needs you: a, b, c and 2 more.');
+  assert.ok(!m.body.includes(String.fromCharCode(0x2014)));
+});
