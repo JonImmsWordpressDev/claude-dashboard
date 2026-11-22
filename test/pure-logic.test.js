@@ -2899,11 +2899,11 @@ test('endOfDaySummary: sessions, cost, waiting and unpushed', () => {
   const m = endOfDaySummary({
     sessions: 4,
     cost: 12.3,
-    waiting: ['gaffer'],
+    waiting: ['api-server'],
     unpushed: [{ name: 'strataWP', ahead: 2, changes: 0 }, { name: 'blog', ahead: 0, changes: 3 }],
   });
   assert.equal(m.title, 'Claude: end of day');
-  assert.equal(m.body, '4 sessions today, about $12.30. Still needs you: gaffer. Unpushed work: strataWP (2 unpushed), blog (3 uncommitted).');
+  assert.equal(m.body, '4 sessions today, about $12.30. Still needs you: api-server. Unpushed work: strataWP (2 unpushed), blog (3 uncommitted).');
 });
 
 test('endOfDaySummary: singular session, no cost, long lists truncated', () => {
