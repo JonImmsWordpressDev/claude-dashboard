@@ -2991,6 +2991,10 @@ async function openSettings() {
         <input type="text" id="set-idle" inputmode="numeric" style="width:70px;text-align:right" value="${c.idleNagMinutes ?? 60}" placeholder="60">
       </div>
       <div class="set-row">
+        <span class="set-label">End-of-day summary<span class="set-sub">one notification a day at this time (24-hour HH:MM): today's sessions and cost, what still needs you, unpushed repos; empty turns it off</span></span>
+        <input type="text" id="set-eod" style="width:70px;text-align:right" value="${esc(c.endOfDayDigest || '')}" placeholder="18:00">
+      </div>
+      <div class="set-row">
         <span class="set-label">Claude.ai chats<span class="set-sub">import conversations.json from your claude.ai export (Settings → Privacy → Export data)</span></span>
         <input type="file" id="set-chats" accept=".json,application/json" style="max-width:210px;font-size:11px;color:var(--muted)">
       </div>
@@ -3098,6 +3102,12 @@ async function openSettings() {
       const n = Math.max(0, Math.round(Number(e.target.value) || 0));
       e.target.value = n;
       saveSetting('/api/config', { idleNagMinutes: n }, n ? `Idle reminder after ${n} min` : 'Idle reminder off');
+    });
+    $('#set-eod').addEventListener('change', (e) => {
+      const v = e.target.value.trim();
+      if (v && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(v)) { toast('Use 24-hour HH:MM, like 18:00'); return; }
+      e.target.value = v;
+      saveSetting('/api/config', { endOfDayDigest: v }, v ? `End-of-day summary at ${v}` : 'End-of-day summary off');
     });
     $('#set-terminal').addEventListener('change', async (e) => {
       await saveSetting('/api/config', { terminal: e.target.value }, `Sessions will open in ${e.target.selectedOptions[0].text}`);

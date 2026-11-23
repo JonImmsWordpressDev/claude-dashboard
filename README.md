@@ -294,6 +294,7 @@ The ⚙ gear in the header opens settings — no JSON editing required:
 - **Theme**: Departures board (follows system light/dark), Phosphor, Amber CRT, Midnight, or Newsprint (`config.json`)
 - **Weekly budget** in dollars — drives the header meter and the 75 / 90 / 100% alerts; `0` turns it off
 - **Idle reminder** in minutes — one extra notification when a session has waited that long; `0` turns it off
+- **End-of-day summary** at a time you pick (24-hour `HH:MM`, e.g. `18:00`; empty, the default, turns it off): one notification a day with today's session count and estimated cost, any session still on **needs you**, and repos with unpushed or uncommitted work. It also lands in the catch-up bell. If the dashboard starts after that time, it waits for tomorrow rather than firing late.
 - **Rename any project** (writes `names.json`) or **hide it** and its whole subtree (writes `ignore.json`), with an unhide list below
 - **Claude.ai chats**: pick the `conversations.json` from your claude.ai export to make those chats searchable here
 - **Updates**: "check for updates" asks GitHub only when you click; when a new release is out, **update now** pulls it in place (git or npm installs) and service installs restart themselves on the new version

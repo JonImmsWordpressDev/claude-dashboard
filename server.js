@@ -141,7 +141,7 @@ const server = http.createServer((req, res) => {
     if (url === '/api/reveal-file') return json(res, 200, { ok: true });
     if (url === '/api/project') return json(res, 200, demoProject());
     if (url === '/api/config' && req.method === 'GET') {
-      return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, idleNagMinutes: 60, terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], themes: cfg.THEMES, version: VERSION, errors: [], pricingSource: null, unpricedModels: [] });
+      return json(res, 200, { demo: true, notifications: true, usageApi: false, weeklyBudget: 200, idleNagMinutes: 60, endOfDayDigest: '', terminals: [], resolvedTerminal: { id: 'terminal', label: 'Terminal' }, claudeApp: false, names: {}, ignores: [], themes: cfg.THEMES, version: VERSION, errors: [], pricingSource: null, unpricedModels: [] });
     }
     if (url === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
