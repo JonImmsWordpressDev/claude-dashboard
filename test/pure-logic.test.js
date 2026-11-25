@@ -542,6 +542,13 @@ test('transcriptLineMatch skips tool results, harness noise, and non-matches', (
   assert.equal(transcriptLineMatch(miss, 'postgres'), null);
 });
 
+test('transcriptLineMatch finds queries with a double quote or backslash', () => {
+  const line = JSON.stringify({ type: 'user', message: { content: 'rename "oldName" in C:\\Users\\jon\\app' } });
+  assert.ok(transcriptLineMatch(line, '"oldname"').text.includes('"oldName"'));
+  assert.ok(transcriptLineMatch(line, 'c:\\users\\jon').text.includes('C:\\Users'));
+  assert.equal(transcriptLineMatch(line, '"newname"'), null);
+});
+
 // --- Linux terminal detection ---
 const { findOnPath } = require('../lib/config');
 
@@ -2674,6 +2681,22 @@ test('searchHistory keeps only prompts from allowed sessions when given a filter
   assert.deepEqual(only.map((r) => r.sessionId), ['s1']);
   // Windows may still hold the read stream's handle a moment after the search
   // resolves; rmSync's retries cover EBUSY/ENOTEMPTY there.
+  fsx.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+});
+
+test('searchHistory finds prompts by a query with a double quote or backslash', async () => {
+  const fsx = require('fs');
+  const osx = require('os');
+  const dir = fsx.mkdtempSync(require('path').join(osx.tmpdir(), 'cd-hist-'));
+  const file = require('path').join(dir, 'history.jsonl');
+  fsx.writeFileSync(file, [
+    JSON.stringify({ display: 'fix "Save" button', project: '/r/site', timestamp: 1, sessionId: 's1' }),
+    JSON.stringify({ display: 'open C:\\Users\\jon\\notes', project: '/r/site', timestamp: 2, sessionId: 's2' }),
+  ].join('\n') + '\n');
+  assert.deepEqual((await searchMod.searchHistory('"save"', { file })).map((r) => r.sessionId), ['s1']);
+  const bs = await searchMod.searchHistory('c:\\users\\jon', { file });
+  assert.deepEqual(bs.map((r) => r.sessionId), ['s2']);
+  assert.ok(bs[0].snippet.includes('C:\\Users\\jon'));
   fsx.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
