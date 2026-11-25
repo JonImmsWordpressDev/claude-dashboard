@@ -2696,6 +2696,52 @@ test('searchTranscripts skips sessions the filters exclude', async () => {
   fsx.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
+// --- Head cut off by a pasted image (issue #4) ---
+const { scanFile, groupByProject } = require('../lib/transcripts');
+
+test('scanFile recovers cwd when a pasted image pushes it past the head read', async () => {
+  const fsx = require('fs');
+  const osx = require('os');
+  const p = require('path');
+  const dir = fsx.mkdtempSync(p.join(osx.tmpdir(), 'cd-head-'));
+  const id = '11111111-2222-3333-4444-555555555555';
+  const file = p.join(dir, `${id}.jsonl`);
+  const ts = '2026-11-20T10:00:00.000Z';
+  const lines = [
+    { type: 'queue-operation', operation: 'enqueue', timestamp: ts, sessionId: id },
+    {
+      type: 'user',
+      message: { role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'A'.repeat(120 * 1024) } },
+        { type: 'text', text: 'why is this button misaligned?' },
+      ] },
+      timestamp: ts, cwd: '/home/alex/site', sessionId: id, gitBranch: 'main',
+    },
+    { type: 'assistant', message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 10, output_tokens: 5 } }, timestamp: ts, cwd: '/home/alex/site', gitBranch: 'main' },
+  ];
+  fsx.writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+  const meta = await scanFile(file, id);
+  assert.equal(meta.cwd, '/home/alex/site');
+  assert.equal(meta.gitBranch, 'main');
+  assert.equal(meta.firstUserPrompt, 'why is this button misaligned?');
+  assert.equal(meta.usage['claude-opus-5'].input, 10);
+  assert.equal(groupByProject([meta]).size, 1);
+  fsx.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+});
+
+test('scanLine only captures the origin record when asked to', () => {
+  const line = JSON.stringify({ type: 'user', message: { content: 'hi' }, cwd: '/r/a', gitBranch: 'dev', timestamp: AUG10 });
+  const idle = freshScan();
+  scanLine(line, idle);
+  assert.equal(idle.origin, undefined);
+  const scan = { ...freshScan(), needOrigin: true };
+  scanLine(line, scan);
+  assert.deepEqual(scan.origin, { cwd: '/r/a', gitBranch: 'dev', startedAt: Date.parse(AUG10), firstUserPrompt: 'hi' });
+  assert.equal(scan.needOrigin, false);
+  scanLine(JSON.stringify({ type: 'user', message: { content: 'later' }, cwd: '/r/b' }), scan);
+  assert.equal(scan.origin.cwd, '/r/a');
+});
+
 // --- MCP server (lib/mcp.js): JSON-RPC over stdio, read-only tools ---
 const { createMcpHandler, MCP_TOOLS } = require('../lib/mcp');
 
