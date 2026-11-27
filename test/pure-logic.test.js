@@ -4,7 +4,7 @@ const assert = require('node:assert');
 
 const { canonicalize, worktreeRoot, encodeProjectDir } = require('../lib/paths');
 const { titleCase, displayBase } = require('../lib/names');
-const { parsePorcelainV2 } = require('../lib/gitstatus');
+const { parsePorcelainV2, findGitDir, parentDir } = require('../lib/gitstatus');
 const { activityBuckets } = require('../lib/history');
 
 test('canonicalize strips trailing slash', () => {
@@ -73,6 +73,36 @@ test('parsePorcelainV2 handles no upstream (ahead/behind null)', () => {
   assert.equal(out.branch, 'master');
   assert.equal(out.ahead, null);
   assert.equal(out.behind, null);
+});
+
+test('findGitDir finds the enclosing repo from a subdirectory', async () => {
+  const has = new Set(['/Users/jon/repo/.git']);
+  const exists = (p) => has.has(p);
+  assert.strictEqual(await findGitDir('/Users/jon/repo', exists), '/Users/jon/repo');
+  assert.strictEqual(await findGitDir('/Users/jon/repo/packages/cli', exists), '/Users/jon/repo');
+  assert.strictEqual(await findGitDir('/Users/jon/repo/docs/', exists), '/Users/jon/repo');
+  assert.strictEqual(await findGitDir('/Users/jon/other', exists), null);
+});
+
+test('findGitDir stops at the nearest .git (nested repo or worktree file)', async () => {
+  const has = new Set(['/r/.git', '/r/vendor/lib/.git']);
+  const exists = async (p) => has.has(p);
+  assert.strictEqual(await findGitDir('/r/vendor/lib/src', exists), '/r/vendor/lib');
+});
+
+test('findGitDir walks Windows paths up to the drive root', async () => {
+  const seen = [];
+  const exists = (p) => { seen.push(p); return p === 'C:/.git'; };
+  assert.strictEqual(await findGitDir('C:\\Users\\jon\\repo', exists), 'C:/');
+  assert.deepStrictEqual(seen, ['C:\\Users\\jon\\repo/.git', 'C:/Users/jon/.git', 'C:/Users/.git', 'C:/.git']);
+});
+
+test('parentDir returns null at the filesystem root', () => {
+  assert.strictEqual(parentDir('/'), null);
+  assert.strictEqual(parentDir('/a'), '/');
+  assert.strictEqual(parentDir('C:/'), null);
+  assert.strictEqual(parentDir('C:/a'), 'C:/');
+  assert.strictEqual(parentDir('/a/b/'), '/a');
 });
 
 test('activityBuckets puts today last and old prompts out of range', () => {
