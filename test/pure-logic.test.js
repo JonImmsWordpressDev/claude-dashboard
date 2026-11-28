@@ -732,7 +732,8 @@ test('updatePlan: npm installs reinstall the published package by name', () => {
 test('updatePlan: brew and npx are manual with a command to show', () => {
   const brew = updatePlan('brew', 'claude-mission-control');
   assert.equal(brew.type, 'manual');
-  assert.ok(brew.message.includes('brew upgrade claude-mission-control'));
+  assert.ok(brew.message.includes('brew upgrade claude-dashboard'));
+  assert.ok(!brew.message.includes('claude-mission-control'));
   const npx = updatePlan('npx', 'claude-mission-control');
   assert.equal(npx.type, 'manual');
   assert.ok(npx.message.toLowerCase().includes('npx'));
