@@ -38,6 +38,13 @@ test('encodeProjectDir matches Claude dir naming (slash, dot, space -> dash)', (
   );
 });
 
+test('encodeProjectDir turns every non-alphanumeric character into a dash', () => {
+  assert.equal(encodeProjectDir('/home/alex/claude_dashboard'), '-home-alex-claude-dashboard');
+  assert.equal(encodeProjectDir('/home/alex/my-app@2'), '-home-alex-my-app-2');
+  assert.equal(encodeProjectDir('/home/alex/repo+x'), '-home-alex-repo-x');
+  assert.equal(encodeProjectDir('/home/alex/Café'), '-home-alex-Caf-');
+});
+
 test('displayBase walks up past generic WP scaffolding segments', () => {
   assert.equal(displayBase('/Users/x/Local Sites/jonimms/app/public'), 'jonimms');
   assert.equal(displayBase('/Users/x/Local Sites/north-ave'), 'north-ave');
